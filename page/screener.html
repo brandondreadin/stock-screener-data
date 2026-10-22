@@ -1,0 +1,715 @@
+<title>Value Ledger Screener</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a ledger workbench. Assumptions strip on top, screener table as the main sheet, a detail sheet slides over from the right. */
+:root{
+  --paper:#f5f6f2; --sheet:#ffffff; --ink:#15211c; --muted:#5d6b64; --rule:#dde2dc; --rule-2:#eceee9;
+  --accent:#0d6a55; --accent-ink:#ffffff; --accent-soft:#e1efe9;
+  --brass:#9a6b1c; --brass-soft:#f6ecd8;
+  --good:#1d7a45; --good-soft:#e2f2e7; --bad:#b03a2e; --bad-soft:#f8e3df; --neutral-soft:#eef0ec;
+  --shadow:0 18px 50px rgba(20,33,28,.18);
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0f1513; --sheet:#151d1a; --ink:#e4ebe7; --muted:#93a39b; --rule:#26322d; --rule-2:#1c2522;
+  --accent:#4cc2a1; --accent-ink:#06231b; --accent-soft:#183a31;
+  --brass:#d9a54b; --brass-soft:#3a2e17;
+  --good:#5ccf8a; --good-soft:#163a26; --bad:#f08a7c; --bad-soft:#40201b; --neutral-soft:#1e2724;
+  --shadow:0 18px 50px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0f1513; --sheet:#151d1a; --ink:#e4ebe7; --muted:#93a39b; --rule:#26322d; --rule-2:#1c2522;
+  --accent:#4cc2a1; --accent-ink:#06231b; --accent-soft:#183a31;
+  --brass:#d9a54b; --brass-soft:#3a2e17;
+  --good:#5ccf8a; --good-soft:#163a26; --bad:#f08a7c; --bad-soft:#40201b; --neutral-soft:#1e2724;
+  --shadow:0 18px 50px rgba(0,0,0,.5); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px;max-width:1480px;margin:0 auto;display:grid;gap:16px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:1.65rem;font-weight:700}
+h2{font-size:1.25rem;font-weight:700}
+h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;font-family:var(--f-body);font-weight:600;color:var(--muted)}
+.mono,td.num,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.top .sub{color:var(--muted);font-size:.86rem;display:flex;flex-wrap:wrap;gap:6px 14px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:middle}
+.dot.live{background:var(--good)}
+
+.assume{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:14px;display:grid;gap:12px}
+.assume .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end}
+.field{display:grid;gap:4px;min-width:0}
+.field label{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.field input,.field select{border:1px solid var(--rule);background:var(--paper);border-radius:6px;padding:7px 9px;width:100%;min-width:0}
+.pct{position:relative}
+.pct input{padding-right:24px;font-family:var(--f-mono)}
+.pct::after{content:"%";position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-family:var(--f-mono)}
+.assume .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.assume .hint{color:var(--muted);font-size:.82rem}
+.stale{color:var(--brass);font-weight:600}
+
+.btn{border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.small{padding:3px 8px;font-size:.78rem}
+.btn[disabled]{opacity:.5;cursor:default}
+
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.filters input[type=search]{flex:1 1 220px;min-width:0;border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:8px 10px}
+.filters select{border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:8px 10px;max-width:100%}
+.chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.86rem}
+.count{color:var(--muted);font-size:.84rem;margin-left:auto}
+
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.scroll{overflow-x:auto;max-height:72vh;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+thead th{position:sticky;top:0;background:var(--sheet);z-index:1;text-align:right;font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--rule);white-space:nowrap;cursor:pointer;user-select:none}
+thead th.l{text-align:left}
+thead th[aria-sort] .ar{color:var(--accent)}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--rule-2);text-align:right;white-space:nowrap}
+tbody td.l{text-align:left}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--accent-soft)}
+.tk{font-family:var(--f-mono);font-weight:500}
+.nm{color:var(--muted);font-size:.78rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;display:block}
+.na{color:var(--muted)}
+.up{color:var(--good);font-weight:600}.down{color:var(--bad);font-weight:600}
+.pill{display:inline-block;font-size:.7rem;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:var(--neutral-soft);color:var(--muted)}
+.pill.w{background:var(--accent-soft);color:var(--accent)}
+.pill.m{background:var(--brass-soft);color:var(--brass)}
+.pill.q{background:var(--neutral-soft);color:var(--muted)}
+.pill.g{background:var(--good-soft);color:var(--good)}
+.pill.b{background:var(--bad-soft);color:var(--bad)}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+
+/* detail sheet */
+.overlay{position:fixed;inset:0;background:rgba(10,18,15,.35);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(860px,100%);background:var(--paper);z-index:21;box-shadow:var(--shadow);display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.dhead{padding:16px max(16px,env(safe-area-inset-left,0px)) 12px 18px;border-bottom:1px solid var(--rule);display:grid;gap:8px;background:var(--sheet)}
+.dhead .r1{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.dhead .px{font-family:var(--f-mono);font-size:1.4rem}
+.dhead .meta{color:var(--muted);font-size:.84rem;display:flex;flex-wrap:wrap;gap:4px 12px}
+.dbody{overflow-y:auto;padding:16px 18px 40px;display:grid;gap:22px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{border:0;background:transparent;padding:6px 10px;border-radius:6px;cursor:pointer;color:var(--muted);font-weight:600;font-size:.84rem}
+.tab[aria-selected=true]{background:var(--accent-soft);color:var(--accent)}
+.vals{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.val{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;padding:12px;display:grid;gap:4px;min-width:0}
+.val .k{font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.val .v{font-family:var(--f-mono);font-size:1.3rem}
+.val .d{font-size:.8rem}
+.val.avg{border-color:var(--accent)}
+.calc{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;overflow:hidden}
+.calc details{border-top:1px solid var(--rule-2)}
+.calc details:first-child{border-top:0}
+.calc summary{padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;font-weight:600}
+.calc .inner{padding:0 12px 12px;display:grid;gap:8px;font-size:.86rem}
+.formula{font-family:var(--f-mono);font-size:.8rem;background:var(--paper);border:1px solid var(--rule-2);border-radius:6px;padding:8px;overflow-x:auto;white-space:pre}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 16px}
+.kv div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dotted var(--rule);padding:3px 0;min-width:0}
+.kv span:first-child{color:var(--muted)}
+.kv span:last-child{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.note{color:var(--muted);font-size:.8rem}
+.ovr{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:end}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.chart{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;padding:10px;min-width:0}
+.chart svg{width:100%;height:auto;display:block}
+.hist{overflow-x:auto;background:var(--sheet);border:1px solid var(--rule);border-radius:9px}
+.hist table{font-size:.8rem}
+.hist td,.hist th{padding:6px 9px}
+.hist thead th{position:static;cursor:default}
+.analysis{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;padding:16px;display:grid;gap:10px;line-height:1.6}
+.analysis h4{font-family:var(--f-display);font-size:1.02rem;margin:8px 0 0}
+.analysis p,.analysis ul{margin:0;max-width:72ch}
+.analysis ul{padding-left:20px}
+.summary{max-width:72ch;line-height:1.6}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:8px;z-index:40;font-size:.86rem;max-width:calc(100% - 32px)}
+@media (max-width:640px){h1{font-size:1.35rem}.dhead .px{font-size:1.15rem}.scroll{max-height:none}}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div style="display:grid;gap:4px;min-width:0">
+      <h1>Value Ledger Screener</h1>
+      <div class="sub">
+        <span id="srcStatus"><span class="dot"></span>Connecting to data</span>
+        <span id="dataAsOf"></span>
+        <span id="aaaShow"></span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="refreshAll" type="button" title="Queue a fresh pull of prices and financials for every stock">Refresh all data</button>
+    </div>
+  </header>
+
+  <section class="assume" aria-label="Assumptions">
+    <div class="grid">
+      <div class="field"><label for="inR">Desired return</label><div class="pct"><input id="inR" type="number" step="0.5" min="1" max="40" value="10"></div></div>
+      <div class="field"><label for="inTG">Terminal growth (DCF)</label><div class="pct"><input id="inTG" type="number" step="0.25" min="0" max="6" value="2.5"></div></div>
+      <div class="field"><label for="inCap">Growth rate cap</label><div class="pct"><input id="inCap" type="number" step="1" min="2" max="50" value="15"></div></div>
+      <div class="field"><label for="inY">Graham discount yield (Y)</label><select id="inY"><option value="aaa">AAA corporate bond yield</option><option value="r">Desired return</option></select></div>
+      <div class="field"><label for="inG">Historical growth measured as</label><select id="inG"><option value="cagr">Compound annual (CAGR)</option><option value="mean">Mean of yearly changes</option></select></div>
+    </div>
+    <div class="row">
+      <span class="hint" id="assumeHint">All four models look 10 years out and discount at the desired return.</span>
+      <button class="btn primary" id="recalcAll" type="button">Recalculate all</button>
+    </div>
+  </section>
+
+  <div class="filters">
+    <input type="search" id="q" placeholder="Search ticker or company" aria-label="Search ticker or company">
+    <select id="fSector" aria-label="Sector"><option value="">All sectors</option></select>
+    <select id="fOpt" aria-label="Options frequency"><option value="">Any options</option><option value="Weekly">Weekly options</option><option value="Monthly">Monthly options</option><option value="Quarterly">Quarterly options</option></select>
+    <label class="chk"><input type="checkbox" id="fUnder"> Below average value</label>
+    <label class="chk"><input type="checkbox" id="fDiv"> Pays dividend</label>
+    <span class="count" id="count"></span>
+  </div>
+
+  <section class="sheet" aria-label="Screener">
+    <div class="scroll">
+      <table id="tbl">
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"><tr><td colspan="14" class="empty">Loading the S&amp;P 500 ledger. Stocks appear here as soon as the data store answers.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="note">Valuations are model outputs from reported financials and the assumptions above. They are a starting point for research, not a recommendation. Prices and options data come from Yahoo Finance; 10-year history from SEC filings.</p>
+</div>
+
+<div class="overlay" id="overlay" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-modal="true" role="dialog" aria-labelledby="dTitle"></aside>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const N = 10; // projection horizon in years
+const THIS_YEAR = new Date().getFullYear();
+
+/* ------------------------------------------------------------ state */
+let STOCKS = [];            // compact records from the data store
+let BY = new Map();
+let META = null;            // {generated, aaa:{value,date}}
+let SET = {r:10, tg:2.5, cap:15, y:"aaa", g:"cagr"};   // live inputs (percent)
+let APPLIED = null;         // assumptions used for the last "recalculate all"
+let OVR = {};               // per-stock growth overrides {ticker:{eps,bv,div,fcf}} in percent
+const RES = new Map();      // ticker -> result
+let INDPE = new Map();
+let QUEUE = new Map();
+let ANALYSES = new Map();
+let sortKey = "upside", sortDir = -1;
+let db = null, sample = null, canWrite = true;
+let openTicker = null;
+
+/* ------------------------------------------------------------ format */
+const money = v => v == null || !isFinite(v) ? "–" : "$" + (Math.abs(v) >= 1000 ? v.toLocaleString(undefined,{maximumFractionDigits:0}) : v.toFixed(2));
+const pct = (v, d=1) => v == null || !isFinite(v) ? "–" : (v*100).toFixed(d) + "%";
+const num = (v, d=2) => v == null || !isFinite(v) ? "–" : v.toFixed(d);
+const big = v => { if (v == null || !isFinite(v)) return "–"; const a=Math.abs(v);
+  return (v<0?"-":"") + "$" + (a>=1e12?(a/1e12).toFixed(2)+"T":a>=1e9?(a/1e9).toFixed(1)+"B":a>=1e6?(a/1e6).toFixed(0)+"M":a.toFixed(0)); };
+const toast = msg => { const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); };
+
+/* ------------------------------------------------------------ growth math */
+function growth(points, method){
+  // points: [{x: years (number), v}] sorted by x; uses the last 11 points (10 intervals)
+  const p = points.filter(o => o.v != null && isFinite(o.v)).slice(-11);
+  if (method === "mean"){
+    const ch = [];
+    for (let i=1;i<p.length;i++) if (p[i-1].v > 0) ch.push(p[i].v / p[i-1].v - 1);
+    if (ch.length < 3) return null;
+    return ch.reduce((a,b)=>a+b,0)/ch.length;
+  }
+  const pos = p.filter(o => o.v > 0);
+  if (pos.length < 2) return null;
+  const a = pos[0], b = pos[pos.length-1];
+  const yrs = b.x - a.x;
+  if (yrs < 3) return null;
+  return Math.pow(b.v / a.v, 1/yrs) - 1;
+}
+const clamp = (g, lo, hi) => g == null ? null : Math.min(hi, Math.max(lo, g));
+const fyX = d => { const t = new Date(d+"T00:00:00Z"); return t.getUTCFullYear() + (t.getUTCMonth())/12 + t.getUTCDate()/365; };
+
+function industryPE(){
+  const sub = new Map(), sec = new Map();
+  for (const s of STOCKS){
+    const pe = s.r?.pe;
+    if (!(pe > 0 && pe <= 100)) continue;
+    (sub.get(s.sub) || sub.set(s.sub, []).get(s.sub)).push(pe);
+    (sec.get(s.sec) || sec.set(s.sec, []).get(s.sec)).push(pe);
+  }
+  const mean = a => a.reduce((x,y)=>x+y,0)/a.length;
+  INDPE = new Map();
+  for (const s of STOCKS){
+    const a = sub.get(s.sub) || [];
+    if (a.length >= 3) INDPE.set(s.t, {pe: mean(a), n: a.length, basis: s.sub});
+    else { const b = sec.get(s.sec) || []; INDPE.set(s.t, b.length ? {pe: mean(b), n: b.length, basis: s.sec + " sector (fewer than 3 sub-industry peers)"} : null); }
+  }
+}
+
+function calc(s, A){
+  const r = A.r/100, tg = A.tg/100, cap = A.cap/100;
+  const o = OVR[s.t] || {};
+  const H = s.h || [];
+  const pts = k => H.map(h => ({x: fyX(h.e), v: h[k]}));
+  const out = {t: s.t, at: {...A}, price: s.p, notes: []};
+
+  // growth inputs
+  const gEpsHist = growth(pts("eps"), A.g);
+  const gBvHist = growth(pts("bv"), A.g);
+  const gFcfHist = growth(pts("fcf"), A.g);
+  const divPts = [];
+  for (let y = THIS_YEAR-11; y <= THIS_YEAR-1; y++){ const v = s.dy?.[y]; if (v != null) divPts.push({x:y, v}); }
+  const gDivHist = growth(divPts, A.g);
+  const gEps = o.eps != null ? o.eps/100 : clamp(gEpsHist, 0, cap);
+  const gBv  = o.bv  != null ? o.bv/100  : clamp(gBvHist, -0.20, cap);
+  const gDiv = o.div != null ? o.div/100 : clamp(gDivHist, -0.20, cap);
+  let gFcf  = o.fcf != null ? o.fcf/100 : clamp(gFcfHist ?? gEpsHist, -0.05, cap);
+  out.g = {eps:gEps, epsHist:gEpsHist, bv:gBv, bvHist:gBvHist, div:gDiv, divHist:gDivHist, fcf:gFcf, fcfHist:gFcfHist};
+
+  // 1. Graham revised: V = EPS x (8.5 + 2g) x 4.4 / Y
+  const Y = A.y === "aaa" ? (META?.aaa?.value ?? null) : A.r;
+  if (s.eps > 0 && gEps != null && Y > 0){
+    const gp = gEps*100;
+    out.graham = {value: s.eps*(8.5+2*gp)*4.4/Y, eps: s.eps, g: gp, Y, ySrc: A.y};
+  } else out.graham = {value:null, why: !(s.eps>0) ? "Trailing EPS is zero or negative." : gEps==null ? "Not enough EPS history to estimate growth." : "No AAA yield available."};
+
+  // 2. DCF on free cash flow per share
+  if (s.sec === "Financials"){
+    out.dcf = {value:null, why:"Free cash flow is not a meaningful measure for banks, insurers and other financial firms, so DCF is skipped."};
+  } else {
+    let f0 = null, src = "";
+    if (s.fcf > 0 && s.sh > 0){ f0 = s.fcf/s.sh; src = "Trailing 12-month free cash flow / shares"; }
+    else { const last3 = H.slice(-3).map(h=>h.fcf).filter(v=>v!=null); const m = last3.length ? last3.reduce((a,b)=>a+b,0)/last3.length : null;
+      if (m > 0){ f0 = m; src = "3-year average free cash flow per share"; } }
+    if (f0 == null) out.dcf = {value:null, why:"Free cash flow is negative or unavailable."};
+    else if (r <= tg) out.dcf = {value:null, why:"Desired return must exceed terminal growth."};
+    else {
+      if (gFcf == null) gFcf = 0.03, out.g.fcf = gFcf;
+      let pv = 0, f = f0; const rows = [];
+      for (let t=1;t<=N;t++){ f *= (1+gFcf); const d = f/Math.pow(1+r,t); pv += d; rows.push([t,f,d]); }
+      const tv = f*(1+tg)/(r-tg), pvTv = tv/Math.pow(1+r,N);
+      out.dcf = {value: pv+pvTv, f0, src, g:gFcf, pvCF: pv, tv, pvTv, rows};
+    }
+  }
+
+  // 3. Multiples: EPS grown 10 years, valued at the industry average P/E, discounted back
+  const ip = INDPE.get(s.t);
+  if (s.eps > 0 && ip && gEps != null){
+    const eps10 = s.eps*Math.pow(1+gEps, N);
+    const fut = eps10*ip.pe;
+    out.mult = {value: fut/Math.pow(1+r,N), eps:s.eps, eps10, indPE: ip.pe, n: ip.n, basis: ip.basis, fut, today: s.eps*ip.pe, g:gEps};
+  } else out.mult = {value:null, why: !(s.eps>0) ? "Trailing EPS is zero or negative." : !ip ? "No industry P/E available." : "Not enough EPS history to estimate growth."};
+
+  // 4. Book value + dividends, 10 years out
+  if (s.bv > 0 && gBv != null){
+    const bv10 = s.bv*Math.pow(1+gBv, N);
+    const pvBv = bv10/Math.pow(1+r,N);
+    let d = s.div > 0 ? s.div : 0, pvDiv = 0; const rows = [];
+    const gd = d > 0 ? (gDiv ?? 0) : 0;
+    for (let t=1;t<=N;t++){ d *= (1+gd); const pvd = d/Math.pow(1+r,t); pvDiv += pvd; rows.push([t,d,pvd]); }
+    out.book = {value: pvBv+pvDiv, bv0:s.bv, gBv, bv10, pvBv, d0: s.div||0, gDiv: gd, pvDiv, rows};
+  } else out.book = {value:null, why: !(s.bv>0) ? "Book value per share is zero or negative." : "Not enough book value history to estimate growth."};
+
+  const vals = [out.graham, out.dcf, out.mult, out.book].map(m=>m.value).filter(v=>v!=null && isFinite(v) && v>0);
+  out.avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
+  out.n = vals.length;
+  out.upside = out.avg && s.p ? out.avg/s.p - 1 : null;
+  return out;
+}
+
+/* ------------------------------------------------------------ table */
+const COLS = [
+  {k:"t", h:"Stock", l:true, v:s=>s.t, f:s=>`<span class="tk">${esc(s.t)}</span><span class="nm" title="${esc(s.n)}">${esc(s.n)}</span>`},
+  {k:"sec", h:"Sector", l:true, v:s=>s.sec, f:s=>`<span class="nm" style="max-width:150px">${esc(s.sec)}</span>`},
+  {k:"p", h:"Price", v:s=>s.p, f:s=>money(s.p)},
+  {k:"graham", h:"Graham", v:(s,R)=>R?.graham.value, f:(s,R)=>cell(R?.graham.value, s.p)},
+  {k:"dcf", h:"DCF", v:(s,R)=>R?.dcf.value, f:(s,R)=>cell(R?.dcf.value, s.p)},
+  {k:"mult", h:"Multiples", v:(s,R)=>R?.mult.value, f:(s,R)=>cell(R?.mult.value, s.p)},
+  {k:"book", h:"Book + Div", v:(s,R)=>R?.book.value, f:(s,R)=>cell(R?.book.value, s.p)},
+  {k:"avg", h:"Avg value", v:(s,R)=>R?.avg, f:(s,R)=>R?.avg ? `<b>${money(R.avg)}</b>` : `<span class="na">–</span>`},
+  {k:"upside", h:"vs price", v:(s,R)=>R?.upside, f:(s,R)=>R?.upside==null?`<span class="na">–</span>`:`<span class="${R.upside>=0?"up":"down"}">${R.upside>=0?"+":""}${pct(R.upside,0)}</span>`},
+  {k:"pe", h:"P/E", v:s=>s.r?.pe, f:s=>num(s.r?.pe,1)},
+  {k:"dyl", h:"Div yld", v:s=>s.div&&s.p?s.div/s.p:0, f:s=>s.div>0&&s.p?pct(s.div/s.p,2):`<span class="na">–</span>`},
+  {k:"opt", h:"Options", v:s=>({Weekly:3,Monthly:2,Quarterly:1}[s.o?.f]||0), f:s=>optPill(s.o?.f)},
+  {k:"cc", h:"30d call, ann.", v:s=>s.o?.cs?.ann, f:s=>s.o?.cs?.ann!=null?pct(s.o.cs.ann,1):`<span class="na">–</span>`},
+  {k:"act", h:"", nosort:true, f:s=>`<button class="btn small" type="button" data-recalc="${esc(s.t)}" title="Recalculate ${esc(s.t)} with the current assumptions">Recalc</button>`},
+];
+function cell(v, p){ if (v==null || !isFinite(v) || v<=0) return `<span class="na">–</span>`; return `<span class="${v>=p?"up":""}">${money(v)}</span>`; }
+function optPill(f){ if (!f || f==="None") return `<span class="pill">None</span>`; const c={Weekly:"w",Monthly:"m",Quarterly:"q"}[f]||""; return `<span class="pill ${c}">${esc(f)}</span>`; }
+
+function renderHead(){
+  $("#thead").innerHTML = COLS.map(c => `<th class="${c.l?"l":""}" data-k="${c.k}" ${c.k===sortKey?`aria-sort="${sortDir>0?"ascending":"descending"}"`:""} scope="col">${esc(c.h)}${c.k===sortKey?` <span class="ar">${sortDir>0?"▲":"▼"}</span>`:""}</th>`).join("");
+}
+function filtered(){
+  const q = $("#q").value.trim().toLowerCase(), sec = $("#fSector").value, of = $("#fOpt").value;
+  const under = $("#fUnder").checked, dv = $("#fDiv").checked;
+  return STOCKS.filter(s => {
+    if (q && !(s.t.toLowerCase().includes(q) || (s.n||"").toLowerCase().includes(q))) return false;
+    if (sec && s.sec !== sec) return false;
+    if (of && s.o?.f !== of) return false;
+    if (dv && !(s.div > 0)) return false;
+    if (under){ const R = RES.get(s.t); if (!(R?.upside > 0)) return false; }
+    return true;
+  });
+}
+function renderTable(){
+  renderHead();
+  if (!STOCKS.length){ return; }
+  const col = COLS.find(c=>c.k===sortKey) || COLS[8];
+  const rows = filtered().map(s => [s, RES.get(s.t)]);
+  rows.sort((a,b) => { const va = col.v(a[0],a[1]), vb = col.v(b[0],b[1]);
+    if (va==null && vb==null) return 0; if (va==null) return 1; if (vb==null) return -1;
+    return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * sortDir; });
+  $("#tbody").innerHTML = rows.length ? rows.map(([s,R]) => `<tr data-t="${esc(s.t)}" tabindex="0">${COLS.map(c=>`<td class="${c.l?"l":"num"}">${c.f(s,R)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${COLS.length}" class="empty">No stocks match these filters.</td></tr>`;
+  $("#count").textContent = `${rows.length} of ${STOCKS.length} stocks`;
+}
+$("#thead").addEventListener("click", e => { const th = e.target.closest("th"); if (!th) return; const c = COLS.find(x=>x.k===th.dataset.k); if (!c || c.nosort) return;
+  if (sortKey === c.k) sortDir *= -1; else { sortKey = c.k; sortDir = c.l ? 1 : -1; } renderTable(); });
+$("#tbody").addEventListener("click", e => {
+  const b = e.target.closest("[data-recalc]");
+  if (b){ e.stopPropagation(); recalcOne(b.dataset.recalc); return; }
+  const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t);
+});
+$("#tbody").addEventListener("keydown", e => { if (e.key==="Enter"){ const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t); } });
+["#q","#fSector","#fOpt","#fUnder","#fDiv"].forEach(id => $(id).addEventListener("input", renderTable));
+
+/* ------------------------------------------------------------ recalculation */
+function readInputs(){
+  const f = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
+  return {r: f("#inR",10), tg: f("#inTG",2.5), cap: f("#inCap",15), y: $("#inY").value, g: $("#inG").value};
+}
+function sameA(a,b){ return a && b && a.r===b.r && a.tg===b.tg && a.cap===b.cap && a.y===b.y && a.g===b.g; }
+function updateHint(){
+  const cur = readInputs();
+  const yTxt = cur.y==="aaa" ? `Graham uses the AAA yield${META?.aaa?` (${META.aaa.value.toFixed(2)}%)`:""}` : "Graham uses the desired return as Y";
+  $("#assumeHint").innerHTML = sameA(cur, APPLIED)
+    ? `All four models look 10 years out and discount at ${cur.r}%. ${esc(yTxt)}.`
+    : `<span class="stale">Assumptions changed.</span> Press Recalculate all, or Recalc on a single stock.`;
+}
+function recalcAll(silent){
+  APPLIED = readInputs(); industryPE();
+  for (const s of STOCKS) RES.set(s.t, calc(s, APPLIED));
+  renderTable(); updateHint(); saveSettings();
+  if (openTicker) renderDetail(openTicker);
+  if (!silent) toast(`Recalculated ${STOCKS.length} stocks at a ${APPLIED.r}% desired return`);
+}
+function recalcOne(t){
+  const s = BY.get(t); if (!s) return; industryPE();
+  const A = readInputs(); RES.set(t, calc(s, A)); renderTable();
+  if (openTicker === t) renderDetail(t);
+  toast(`Recalculated ${t} at a ${A.r}% desired return`);
+}
+$("#recalcAll").addEventListener("click", () => recalcAll(false));
+["#inR","#inTG","#inCap","#inY","#inG"].forEach(id => $(id).addEventListener("input", updateHint));
+
+/* ------------------------------------------------------------ detail */
+function openDetail(t){
+  openTicker = t; $("#overlay").hidden = false; $("#drawer").hidden = false; document.body.style.overflow = "hidden";
+  renderDetail(t); $("#drawer").querySelector(".dclose")?.focus();
+}
+function closeDetail(){ openTicker = null; $("#overlay").hidden = true; $("#drawer").hidden = true; document.body.style.overflow = ""; }
+$("#overlay").addEventListener("click", closeDetail);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && openTicker) closeDetail(); });
+let detailTab = "value";
+
+function spark(H, key, label, fmt){
+  const pts = H.map(h=>({e:h.e, v:h[key]})).filter(p=>p.v!=null);
+  if (pts.length < 2) return `<div class="chart"><h3>${esc(label)}</h3><p class="note">Not enough history.</p></div>`;
+  const W=280, Hh=120, L=8, R=8, T=14, B=22;
+  const vs = pts.map(p=>p.v), mn = Math.min(0,...vs), mx = Math.max(...vs, 0) || 1;
+  const sx = i => L + i*(W-L-R)/(pts.length-1), sy = v => T + (mx - v)*(Hh-T-B)/(mx-mn || 1);
+  const bw = Math.max(4, (W-L-R)/pts.length*0.6);
+  const bars = pts.map((p,i)=>`<rect x="${(sx(i)-bw/2).toFixed(1)}" y="${Math.min(sy(p.v),sy(0)).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.abs(sy(p.v)-sy(0)).toFixed(1)}" fill="${p.v<0?"var(--bad)":i===pts.length-1?"var(--accent)":"var(--rule)"}" rx="1.5"><title>${p.e.slice(0,4)}: ${fmt(p.v)}</title></rect>`).join("");
+  const last = pts[pts.length-1];
+  return `<div class="chart"><h3>${esc(label)}</h3><svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="${esc(label)} by fiscal year">
+    <line x1="${L}" x2="${W-R}" y1="${sy(0)}" y2="${sy(0)}" stroke="var(--muted)" stroke-width=".6"/>
+    ${bars}
+    <text x="${L}" y="${Hh-6}" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">FY${pts[0].e.slice(2,4)}</text>
+    <text x="${W-R}" y="${Hh-6}" font-size="10" fill="var(--muted)" text-anchor="end" font-family="IBM Plex Mono, monospace">FY${last.e.slice(2,4)}</text>
+    <text x="${W-R}" y="10" font-size="10.5" fill="var(--ink)" text-anchor="end" font-family="IBM Plex Mono, monospace">${esc(fmt(last.v))}</text>
+  </svg></div>`;
+}
+
+function renderDetail(t){
+  const s = BY.get(t); if (!s) return;
+  const R = RES.get(t) || calc(s, readInputs());
+  const q = QUEUE.get(t);
+  const tabs = [["value","Valuation"],["ratios","Ratios"],["history","History"],["options","Options"],["company","Company"],["analysis","In-depth analysis"]];
+  const ups = R.upside;
+  $("#drawer").innerHTML = `
+  <div class="dhead">
+    <div class="r1">
+      <div style="min-width:0;display:grid;gap:2px">
+        <h2 id="dTitle"><span class="mono">${esc(s.t)}</span> · ${esc(s.n)}</h2>
+        <div class="meta"><span>${esc(s.sub)}</span><span>${esc(s.sec)}</span>${s.hq?`<span>${esc(s.hq)}</span>`:""}</div>
+      </div>
+      <button class="btn small dclose" type="button" aria-label="Close">Close</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center">
+      <span class="px">${money(s.p)}</span>
+      ${R.avg?`<span>Average value <b class="mono">${money(R.avg)}</b> <span class="${ups>=0?"up":"down"}">(${ups>=0?"+":""}${pct(ups,0)})</span></span>`:""}
+      ${optPill(s.o?.f)}
+      <span class="note">Calculated at ${R.at.r}% desired return · data ${esc((s.u||"").slice(0,10))}</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center">
+      <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button class="tab" role="tab" type="button" data-tab="${k}" aria-selected="${detailTab===k}">${l}</button>`).join("")}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn small" type="button" id="dRecalc">Recalculate</button>
+        <button class="btn small" type="button" id="dRefresh" ${q?"disabled":""}>${q?"Refresh queued":"Refresh data"}</button>
+      </div>
+    </div>
+  </div>
+  <div class="dbody">${detailBody(s, R)}</div>`;
+  const d = $("#drawer");
+  d.querySelector(".dclose").onclick = closeDetail;
+  d.querySelectorAll(".tab").forEach(b => b.onclick = () => { detailTab = b.dataset.tab; renderDetail(t); });
+  d.querySelector("#dRecalc").onclick = () => recalcOne(t);
+  d.querySelector("#dRefresh").onclick = () => queueRefresh([t]);
+  const ov = d.querySelector("#ovrSave"); if (ov) ov.onclick = () => saveOverride(t);
+  const oc = d.querySelector("#ovrClear"); if (oc) oc.onclick = () => { delete OVR[t]; saveSettings(); recalcOne(t); };
+  const ga = d.querySelector("#genAnalysis"); if (ga) ga.onclick = () => runAnalysis(t);
+}
+
+function valCard(k, m, p){
+  const v = m.value;
+  return `<div class="val"><span class="k">${k}</span><span class="v">${v!=null&&v>0?money(v):"–"}</span>
+    <span class="d">${v!=null&&v>0&&p?`<span class="${v>=p?"up":"down"}">${v>=p?"+":""}${pct(v/p-1,0)} vs price</span>`:`<span class="note">${esc(m.why||"Not available")}</span>`}</span></div>`;
+}
+
+function detailBody(s, R){
+  const g = R.g;
+  if (detailTab === "value"){
+    const gr = R.graham, dc = R.dcf, mu = R.mult, bk = R.book;
+    const o = OVR[s.t] || {};
+    return `
+    <div class="vals">
+      ${valCard("Graham (revised)", gr, s.p)}${valCard("Discounted cash flow", dc, s.p)}${valCard("Industry multiples", mu, s.p)}${valCard("Book + dividends", bk, s.p)}
+      <div class="val avg"><span class="k">Average of ${R.n} model${R.n===1?"":"s"}</span><span class="v">${money(R.avg)}</span><span class="d">${R.upside!=null?`<span class="${R.upside>=0?"up":"down"}">${R.upside>=0?"+":""}${pct(R.upside,0)} vs ${money(s.p)}</span>`:""}</span></div>
+    </div>
+    <div class="calc">
+      <details open><summary><span>Graham revised formula</span><span class="mono">${money(gr.value)}</span></summary><div class="inner">
+        <div class="formula">V = EPS × (8.5 + 2g) × 4.4 ÷ Y${gr.value!=null?`\n  = ${num(gr.eps)} × (8.5 + 2 × ${num(gr.g)}) × 4.4 ÷ ${num(gr.Y)}\n  = ${money(gr.value)}`:""}</div>
+        <p class="note">EPS is trailing 12 months. g is the expected annual EPS growth in percent (historical, floored at 0 and capped at ${R.at.cap}%). Y is ${gr.ySrc==="r"?"the desired return":"the current Moody's AAA corporate bond yield"}; 4.4 was the AAA yield when Graham revised the formula. ${gr.ySrc!=="r"?"The revised formula discounts through Y by design; switch Graham discount yield to Desired return above to use your rate instead.":""}</p>
+      </div></details>
+      <details><summary><span>Discounted cash flow</span><span class="mono">${money(dc.value)}</span></summary><div class="inner">
+        ${dc.value!=null?`<div class="kv"><div><span>Base FCF / share</span><span>${money(dc.f0)}</span></div><div><span>Growth (years 1 to 10)</span><span>${pct(dc.g)}</span></div><div><span>PV of 10 years of FCF</span><span>${money(dc.pvCF)}</span></div><div><span>Terminal value (yr 10)</span><span>${money(dc.tv)}</span></div><div><span>PV of terminal value</span><span>${money(dc.pvTv)}</span></div><div><span>Discount rate</span><span>${R.at.r}%</span></div></div>
+        <p class="note">Base: ${esc(dc.src)}. Each year's cash flow is discounted at the desired return; the terminal value uses the Gordon growth formula at ${R.at.tg}% and is discounted from year 10.</p>`:`<p class="note">${esc(dc.why)}</p>`}
+      </div></details>
+      <details><summary><span>Industry multiples</span><span class="mono">${money(mu.value)}</span></summary><div class="inner">
+        ${mu.value!=null?`<div class="formula">EPS in 10 yrs = ${num(mu.eps)} × (1 + ${pct(mu.g)})^10 = ${num(mu.eps10)}
+Price in 10 yrs = ${num(mu.eps10)} × industry P/E ${num(mu.indPE,1)} = ${money(mu.fut)}
+Present value  = ${money(mu.fut)} ÷ (1 + ${R.at.r}%)^10 = ${money(mu.value)}</div>
+        <p class="note">Industry P/E is the average trailing P/E of ${mu.n} S&amp;P 500 companies in ${esc(mu.basis)} (P/Es above 100 or negative excluded). At today's EPS that multiple implies ${money(mu.today)}.</p>`:`<p class="note">${esc(mu.why)}</p>`}
+      </div></details>
+      <details><summary><span>Book value + dividends</span><span class="mono">${money(bk.value)}</span></summary><div class="inner">
+        ${bk.value!=null?`<div class="kv"><div><span>Book value / share now</span><span>${money(bk.bv0)}</span></div><div><span>Book value growth</span><span>${pct(bk.gBv)}</span></div><div><span>Book value in 10 yrs</span><span>${money(bk.bv10)}</span></div><div><span>PV of book value</span><span>${money(bk.pvBv)}</span></div><div><span>Dividends, trailing 12 mo</span><span>${money(bk.d0)}</span></div><div><span>Dividend growth</span><span>${pct(bk.gDiv)}</span></div><div><span>PV of 10 yrs of dividends</span><span>${money(bk.pvDiv)}</span></div></div>
+        <p class="note">Growth rates come from the last 10 years of book value per share (SEC filings) and dividends per share (calendar years ${THIS_YEAR-11} to ${THIS_YEAR-1}). Both are discounted at ${R.at.r}%.</p>`:`<p class="note">${esc(bk.why)}</p>`}
+      </div></details>
+    </div>
+    <section style="display:grid;gap:10px">
+      <h3>Growth rates used</h3>
+      <div class="kv">
+        <div><span>EPS, historical</span><span>${pct(g.epsHist)}</span></div><div><span>EPS, used</span><span>${pct(g.eps)}</span></div>
+        <div><span>Book value, historical</span><span>${pct(g.bvHist)}</span></div><div><span>Book value, used</span><span>${pct(g.bv)}</span></div>
+        <div><span>Dividends, historical</span><span>${pct(g.divHist)}</span></div><div><span>Dividends, used</span><span>${pct(g.div)}</span></div>
+        <div><span>Free cash flow, historical</span><span>${pct(g.fcfHist)}</span></div><div><span>Free cash flow, used</span><span>${pct(g.fcf)}</span></div>
+      </div>
+      <p class="note">Override any growth rate for this stock, then save to recalculate it. Overrides stay until cleared.</p>
+      <div class="ovr">
+        ${[["eps","EPS growth"],["bv","Book value growth"],["div","Dividend growth"],["fcf","FCF growth"]].map(([k,l])=>`<div class="field"><label for="ov_${k}">${l}</label><div class="pct"><input id="ov_${k}" type="number" step="0.5" placeholder="auto" value="${o[k]??""}"></div></div>`).join("")}
+        <div style="display:flex;gap:6px"><button class="btn small primary" type="button" id="ovrSave">Save and recalculate</button>${OVR[s.t]?`<button class="btn small" type="button" id="ovrClear">Clear</button>`:""}</div>
+      </div>
+    </section>`;
+  }
+  if (detailTab === "ratios"){
+    const r = s.r || {};
+    const de = r.de != null ? r.de/100 : null;
+    const groups = [
+      ["Valuation", [["P/E (trailing)",num(r.pe,1)],["P/E (forward)",num(r.fpe,1)],["PEG",num(r.peg,2)],["Price / book",num(r.pb,2)],["Price / sales",num(r.ps,2)],["EV / EBITDA",num(r.eve,1)],["FCF yield",s.fcf&&s.mc?pct(s.fcf/s.mc,1):"–"],["Earnings yield",s.eps>0&&s.p?pct(s.eps/s.p,1):"–"]]],
+      ["Profitability", [["Gross margin",pct(r.gm)],["Operating margin",pct(r.om)],["Net margin",pct(r.nm)],["Return on equity",pct(r.roe)],["Return on assets",pct(r.roa)]]],
+      ["Financial health", [["Debt / equity",de!=null?num(de,2)+"x":"–"],["Current ratio",num(r.cr,2)],["Quick ratio",num(r.qr,2)],["Total cash",big(r.cash)],["Total debt",big(r.debt)]]],
+      ["Dividends", [["Dividend (TTM)",money(s.div)],["Yield",s.div>0&&s.p?pct(s.div/s.p,2):"–"],["Payout ratio",pct(r.pay)],["Ex-dividend date",esc(r.exd||"–")]]],
+      ["Market", [["Market cap",big(s.mc)],["Beta",num(r.beta,2)],["52-week range",`${money(r.l52)} to ${money(r.h52)}`],["50 / 200-day avg",`${money(r.ma50)} / ${money(r.ma200)}`],["Analyst target",money(r.tgt)],["Analyst view",esc(r.rec||"–")]]],
+      ["Per share", [["EPS (TTM)",money(s.eps)],["EPS (forward)",money(r.feps)],["Book value",money(s.bv)],["FCF",s.fcf&&s.sh?money(s.fcf/s.sh):"–"]]],
+    ];
+    return groups.map(([h,rows])=>`<section style="display:grid;gap:8px"><h3>${h}</h3><div class="kv">${rows.map(([k,v])=>`<div><span>${k}</span><span>${v}</span></div>`).join("")}</div></section>`).join("");
+  }
+  if (detailTab === "history"){
+    const H = s.h || [];
+    const divRows = []; for (let y=THIS_YEAR-11;y<=THIS_YEAR-1;y++) if (s.dy?.[y]!=null) divRows.push({e:`${y}-12-31`, v:s.dy[y]});
+    return `<div class="charts">
+      ${spark(H,"eps","Diluted EPS",money)}${spark(H,"bv","Book value per share",money)}${spark(H,"fcf","Free cash flow per share",money)}${spark(divRows,"v","Dividends per share (calendar year)",money)}
+    </div>
+    <div class="hist"><table><thead><tr><th class="l">Fiscal year end</th><th>Revenue</th><th>Net income</th><th>EPS</th><th>Book / sh</th><th>FCF / sh</th><th>Div / sh</th></tr></thead>
+    <tbody>${H.slice().reverse().map(h=>`<tr><td class="l mono">${esc(h.e)}${h.a?" *":""}</td><td class="num">${big(h.rev)}</td><td class="num">${big(h.ni)}</td><td class="num">${money(h.eps)}</td><td class="num">${money(h.bv)}</td><td class="num">${money(h.fcf)}</td><td class="num">${money(h.dps)}</td></tr>`).join("")}</tbody></table></div>
+    <p class="note">From 10-K XBRL data at SEC, adjusted for stock splits. ${H.some(h=>h.a)?"* Per-share figures approximated with today's share count because the filing reports per-share data by share class.":""}</p>`;
+  }
+  if (detailTab === "options"){
+    const o = s.o || {}, c = o.cs;
+    if (!o.f || o.f === "None") return `<p class="note">No listed options found for ${esc(s.t)}.</p>`;
+    const ex = (o.x||[]).map(d=>`<span class="pill">${esc(d)}</span>`).join(" ");
+    return `<section style="display:grid;gap:10px">
+      <h3>Expiration frequency</h3>
+      <p>${optPill(o.f)} &nbsp;${o.f==="Weekly"?"Weekly expirations are listed, so you can write covered calls every week as well as on the standard monthly cycle.":o.f==="Monthly"?"Options expire on the standard monthly cycle (third Friday), with longer-dated quarterly and LEAPS contracts further out.":"Only a few expirations are listed, mostly quarterly or longer-dated."}</p>
+      <h3>Next expirations</h3><div style="display:flex;flex-wrap:wrap;gap:6px">${ex}</div>
+    </section>
+    ${c?`<section style="display:grid;gap:10px"><h3>Covered call snapshot, about 30 days out</h3>
+      <div class="kv"><div><span>Expiration</span><span>${esc(c.e)} (${c.d} days)</span></div><div><span>Strike (first at or above price)</span><span>${money(c.k)}</span></div><div><span>Bid / ask</span><span>${money(c.b)} / ${money(c.a)}</span></div><div><span>Mid premium</span><span>${money(c.m)}</span></div><div><span>Implied volatility</span><span>${pct(c.iv)}</span></div><div><span>Open interest</span><span>${c.oi?.toLocaleString?.()??"–"}</span></div><div><span>Premium / price</span><span>${pct(c.py,2)}</span></div><div><span>Annualized</span><span>${pct(c.ann,1)}</span></div></div>
+      <p class="note">Premium per share at the mid quote as of the last data pull, before commissions. Annualized assumes the same premium could be collected each cycle, which varies with volatility.</p></section>`:""}`;
+  }
+  if (detailTab === "company"){
+    return `<section style="display:grid;gap:10px"><h3>Business</h3><p class="summary">${esc(s.sum||"No description available.")}</p>
+      <div class="kv"><div><span>Industry (Yahoo)</span><span>${esc(s.ind||"–")}</span></div><div><span>GICS sub-industry</span><span>${esc(s.sub)}</span></div><div><span>Employees</span><span>${s.emp?.toLocaleString?.()??"–"}</span></div><div><span>Founded</span><span>${esc(s.fd||"–")}</span></div></div>
+      ${s.web?`<p><a href="${esc(s.web)}" target="_blank" rel="noopener">${esc(s.web.replace(/^https?:\/\//,""))}</a></p>`:""}
+      <p><a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${esc(s.cik)}&type=10-K" target="_blank" rel="noopener">SEC filings</a> · <a href="https://finance.yahoo.com/quote/${esc(s.t.replace(".","-"))}" target="_blank" rel="noopener">Yahoo Finance</a></p></section>`;
+  }
+  if (detailTab === "analysis"){
+    const a = ANALYSES.get(s.t);
+    return `<div class="analysis" id="anaBox">
+      ${a?renderMd(a.text):`<p>Generate a written analysis of ${esc(s.n)}: business model, competitive position, financial health, growth drivers, risks, how the four valuation models compare, and covered call considerations.</p>`}
+      ${a?`<p class="note">Written ${esc((a.at||"").slice(0,10))} at a price of ${money(a.price)}. Built from this page's figures plus Claude's general knowledge, which may lag recent events.</p>`:""}
+      <div>${sample?`<button class="btn primary" type="button" id="genAnalysis">${a?"Rewrite analysis":"Generate analysis"}</button>`:`<p class="note">Analysis needs the page's Claude access, which isn't available in this view.</p>`}</div>
+    </div>`;
+  }
+  return "";
+}
+
+function renderMd(t){
+  const lines = String(t).split(/\n/); let html = "", inList = false;
+  const inline = x => esc(x).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+  for (const ln of lines){
+    const l = ln.trim();
+    if (/^[-*] /.test(l)){ if(!inList){html+="<ul>";inList=true;} html+=`<li>${inline(l.slice(2))}</li>`; continue; }
+    if (inList){ html+="</ul>"; inList=false; }
+    if (!l) continue;
+    if (/^#{1,4} /.test(l)) html += `<h4>${inline(l.replace(/^#+ /,""))}</h4>`;
+    else html += `<p>${inline(l)}</p>`;
+  }
+  if (inList) html += "</ul>";
+  return html;
+}
+
+function saveOverride(t){
+  const o = {};
+  for (const k of ["eps","bv","div","fcf"]){ const v = parseFloat($("#ov_"+k).value); if (isFinite(v)) o[k] = v; }
+  if (Object.keys(o).length) OVR[t] = o; else delete OVR[t];
+  saveSettings(); recalcOne(t);
+}
+
+/* ------------------------------------------------------------ analysis (Claude) */
+async function runAnalysis(t){
+  const s = BY.get(t), R = RES.get(t) || calc(s, readInputs());
+  const box = $("#anaBox"); if (!box) return;
+  const btn = $("#genAnalysis"); if (btn) btn.disabled = true;
+  box.innerHTML = `<p class="note">Writing the analysis…</p>`;
+  const facts = {
+    ticker:s.t, name:s.n, sector:s.sec, subIndustry:s.sub, price:s.p, marketCap:s.mc, description:(s.sum||"").slice(0,1500),
+    ratios:s.r, epsTTM:s.eps, bookValuePerShare:s.bv, dividendTTM:s.div, freeCashFlowTTM:s.fcf,
+    history:(s.h||[]).map(h=>({fyEnd:h.e, revenue:h.rev, netIncome:h.ni, eps:h.eps, bvps:h.bv, fcfps:h.fcf, dps:h.dps})),
+    valuations:{desiredReturn:R.at.r+"%", graham:R.graham.value, dcf:R.dcf.value, multiples:R.mult.value, industryPE:R.mult.indPE, bookPlusDividends:R.book.value, average:R.avg, growthUsed:R.g},
+    options:{frequency:s.o?.f, thirtyDayATMCall:s.o?.cs}
+  };
+  const prompt = `You are an equity analyst writing for an experienced individual investor who is a tax and accounting professional. Write an in-depth analysis of ${s.n} (${s.t}) using the data below plus your general knowledge of the company.
+
+Use these sections, each as a "## " heading: Business model, Competitive position, Financial health, Growth drivers, Key risks, Valuation read (compare the four model outputs with the price and explain why they differ, noting which assumptions drive each), Covered call considerations (options frequency, premium level, dividend and ex-dividend timing, assignment risk).
+
+Rules: plain text with "## " headings and "- " bullets only. Be specific and quantitative, citing the figures provided. Be direct and balanced. Do not give buy or sell recommendations or promise returns. Do not use em dashes. Note briefly if your knowledge of recent events may be dated. About 700 words.
+
+DATA:
+${JSON.stringify(facts)}`;
+  try{
+    const res = await sample(prompt, {modelTier:"complex", onText: u => { box.innerHTML = renderMd(u.text) || `<p class="note">Thinking…</p>`; }});
+    const a = {text: res.text, at: new Date().toISOString(), price: s.p};
+    ANALYSES.set(t, a);
+    if (db) db.doc("analyses/" + t).set(a).catch(()=>{});
+    if (openTicker === t) renderDetail(t);
+  } catch(e){
+    box.innerHTML = `<p class="note">${e?.code==="rate_limited"?"Too many requests right now. Try again in a minute.":e?.code==="not_granted"?"Claude access wasn't granted for this page.":"The analysis couldn't be generated. Try again."}</p>`;
+  }
+}
+
+/* ------------------------------------------------------------ refresh queue */
+async function queueRefresh(tickers){
+  if (!db){ toast("Refresh requests need the data store, which isn't connected."); return; }
+  try{
+    const at = new Date().toISOString();
+    for (const t of tickers) await db.doc("refreshQueue/" + t).set({ticker:t, requestedAt:at, status:"queued"});
+    tickers.forEach(t => QUEUE.set(t, {status:"queued"}));
+    toast(tickers.length===1 && tickers[0]!=="ALL" ? `Queued fresh data for ${tickers[0]}. It's picked up at the next sync.` : "Queued a full data refresh. It's picked up at the next sync.");
+    if (openTicker) renderDetail(openTicker);
+  } catch(e){ toast("Only editors can queue a data refresh."); }
+}
+$("#refreshAll").addEventListener("click", () => queueRefresh(["ALL"]));
+
+/* ------------------------------------------------------------ settings */
+function applyInputs(A){ $("#inR").value=A.r; $("#inTG").value=A.tg; $("#inCap").value=A.cap; $("#inY").value=A.y; $("#inG").value=A.g; }
+let saveT = null;
+function saveSettings(){
+  const payload = {assumptions: APPLIED || readInputs(), overrides: OVR, savedAt: new Date().toISOString()};
+  try{ localStorage.setItem("vls-settings", JSON.stringify(payload)); }catch(e){}
+  if (!db || !canWrite) return;
+  clearTimeout(saveT); saveT = setTimeout(() => db.doc("settings/main").set(payload).catch(()=>{ canWrite = false; }), 600);
+}
+function loadLocal(){ try{ const p = JSON.parse(localStorage.getItem("vls-settings")||"null"); if (p){ if(p.assumptions) applyInputs(p.assumptions); OVR = p.overrides||{}; } }catch(e){} }
+
+/* ------------------------------------------------------------ data */
+function ingest(chunks){
+  const list = [];
+  for (const c of chunks) for (const s of (c.stocks||[])) list.push(s);
+  list.sort((a,b)=>a.t.localeCompare(b.t));
+  STOCKS = list; BY = new Map(list.map(s=>[s.t,s]));
+  const secs = [...new Set(list.map(s=>s.sec).filter(Boolean))].sort();
+  const cur = $("#fSector").value;
+  $("#fSector").innerHTML = `<option value="">All sectors</option>` + secs.map(x=>`<option ${x===cur?"selected":""}>${esc(x)}</option>`).join("");
+  recalcAll(true);
+}
+function showMeta(){
+  if (!META) return;
+  $("#dataAsOf").textContent = META.generated ? `Data as of ${new Date(META.generated).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}` : "";
+  $("#aaaShow").textContent = META.aaa ? `AAA yield ${META.aaa.value.toFixed(2)}% (${META.aaa.date})` : "";
+  updateHint();
+}
+
+async function boot(){
+  loadLocal(); APPLIED = readInputs(); renderHead(); updateHint();
+  const C = window.claude;
+  if (!C?.use){ $("#srcStatus").innerHTML = `<span class="dot"></span>Open this page in Claude to load data`; emptyState(); return; }
+  C.use("sample").then(x => { sample = x; if (openTicker && detailTab==="analysis") renderDetail(openTicker); });
+  db = await C.use("db");
+  if (!db){ $("#srcStatus").innerHTML = `<span class="dot"></span>Data store unavailable in this view`; emptyState(); return; }
+  try{ const u = await C.use("user"); if (u && u.can && u.can("data.write") === false) canWrite = false; }catch(e){}
+  $("#srcStatus").innerHTML = `<span class="dot live"></span>Live data store`;
+  try{
+    const st = await db.doc("settings/main").get();
+    if (st.exists){ const p = st.data(); if (p.assumptions) applyInputs(p.assumptions); OVR = p.overrides || OVR; APPLIED = readInputs(); }
+  }catch(e){}
+  db.doc("meta/info").onSnapshot(d => { META = d.exists ? d.data() : null; showMeta(); if (STOCKS.length) recalcAll(true); }, ()=>{});
+  db.collection("chunks").onSnapshot(qs => {
+    const ch = qs.docs.map(d=>d.data());
+    if (!ch.length){ emptyState(); return; }
+    ingest(ch);
+  }, () => emptyState("The data store couldn't be read. Reload the page to try again."));
+  db.collection("refreshQueue").onSnapshot(qs => { QUEUE = new Map(qs.docs.map(d=>[d.id, d.data()]).filter(([,v])=>v.status==="queued")); if (openTicker) renderDetail(openTicker); }, ()=>{});
+  db.collection("analyses").onSnapshot(qs => { ANALYSES = new Map(qs.docs.map(d=>[d.id, d.data()])); if (openTicker && detailTab==="analysis") renderDetail(openTicker); }, ()=>{});
+}
+function emptyState(msg){
+  if (STOCKS.length) return;
+  $("#tbody").innerHTML = `<tr><td colspan="${COLS.length}" class="empty">${esc(msg || "No stock data loaded yet. The S&P 500 pull fills this table after each sync.")}</td></tr>`;
+  $("#count").textContent = "";
+}
+boot();
+})();
+</script>

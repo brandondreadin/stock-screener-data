@@ -147,7 +147,17 @@ def split_factor_after(splits, filed):
     return f
 
 
+PREDECESSOR_CIK = {"0002115436": "0000034088"}  # ExxonMobil holding company -> Exxon Mobil Corp
+
+
 def sec_history(cik, splits, fallback_shares=None):
+    hist = _sec_history(cik, splits, fallback_shares)
+    if (not hist or all(h.get("eps") is None for h in hist)) and cik in PREDECESSOR_CIK:
+        hist = _sec_history(PREDECESSOR_CIK[cik], splits, fallback_shares)
+    return hist
+
+
+def _sec_history(cik, splits, fallback_shares=None):
     url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
     for attempt in range(3):
         try:
@@ -218,6 +228,19 @@ INFO_KEYS = [
 ]
 
 
+def classify_expirations(dates):
+    """Weekly if several expirations within a week of each other in the next 10 weeks.
+    Monthly if at least two consecutive monthly expirations are listed (new months keep rolling in).
+    Quarterly if only quarterly-cycle expirations are listed."""
+    near = [d for d in dates if (d - TODAY).days <= 70]
+    gaps = [(b - a).days for a, b in zip(near, near[1:])]
+    if gaps and sum(1 for g in gaps if g <= 8) >= 2:
+        return "Weekly"
+    months = sorted({(d.year, d.month) for d in dates if (d - TODAY).days <= 100})
+    consecutive = any((m2[0] * 12 + m2[1]) - (m1[0] * 12 + m1[1]) == 1 for m1, m2 in zip(months, months[1:]))
+    return "Monthly" if consecutive else "Quarterly"
+
+
 def options_profile(tk, price):
     try:
         exps = list(tk.options or [])
@@ -226,13 +249,7 @@ def options_profile(tk, price):
     if not exps:
         return {"frequency": "None", "expirations": []}
     dates = sorted(dt.date.fromisoformat(e) for e in exps)
-    near = [d for d in dates if (d - TODAY).days <= 70]
-    gaps = [(b - a).days for a, b in zip(near, near[1:])]
-    if gaps and min(gaps) <= 8 and sum(1 for g in gaps if g <= 8) >= 2:
-        freq = "Weekly"
-    else:
-        months = {(d.year, d.month) for d in dates if (d - TODAY).days <= 120}
-        freq = "Monthly" if len(months) >= 3 else "Quarterly"
+    freq = classify_expirations(dates)
     out = {"frequency": freq, "expirations": [d.isoformat() for d in dates[:12]], "count": len(dates)}
 
     # Near-month covered-call snapshot: expiration closest to 30 days, first strike at or above price
@@ -346,7 +363,7 @@ def main():
         print("Not in S&P 500 list:", missing)
 
     results = {}
-    with ThreadPoolExecutor(max_workers=6) as ex:
+    with ThreadPoolExecutor(max_workers=4) as ex:
         futs = {ex.submit(build, c): c["ticker"] for c in targets}
         for i, f in enumerate(as_completed(futs), 1):
             t = futs[f]
@@ -357,6 +374,24 @@ def main():
                 results[t] = {**by_t[t], "errors": [str(e)]}
             if i % 25 == 0:
                 print(f"{i}/{len(targets)}", flush=True)
+
+    # second pass: retry anything Yahoo rate-limited, slowly and one at a time
+    def needs_retry(rec):
+        y = rec.get("yahoo") or {}
+        return not y.get("price") or (y.get("options") or {}).get("frequency") in (None, "None")
+    retry = [t for t, rec in results.items() if needs_retry(rec)]
+    if retry:
+        print(f"Retrying {len(retry)} tickers after a pause", flush=True)
+        time.sleep(60)
+        for t in retry:
+            for attempt in range(3):
+                rec = build(by_t[t])
+                if not needs_retry(rec):
+                    break
+                time.sleep(20 * (attempt + 1))
+            if (rec.get("yahoo") or {}).get("price") or not (results[t].get("yahoo") or {}).get("price"):
+                results[t] = rec
+            time.sleep(1.5)
 
     merged = {} if not only else dict(existing)
     for c in cons:  # keep index membership current on full runs
