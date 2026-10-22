@@ -69,6 +69,15 @@ button,input,select{font:inherit;color:inherit}
 .filters select{border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:8px 10px;max-width:100%}
 .chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.86rem}
 .count{color:var(--muted);font-size:.84rem;margin-left:auto}
+.fbar{display:grid;gap:8px;background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:10px 12px}
+.frow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.frow select,.frow input{border:1px solid var(--rule);background:var(--paper);border-radius:6px;padding:6px 8px;min-width:0}
+.frow input{width:96px;font-family:var(--f-mono)}
+.frow .u{color:var(--muted);font-size:.8rem;min-width:24px}
+.frow .and{color:var(--muted);font-size:.84rem}
+.frow .x{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:6px}
+.frow .x:hover{color:var(--bad);background:var(--bad-soft)}
+.fbar .foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
 .colmenu{position:relative}
 .colmenu summary{list-style:none}
 .colmenu summary::-webkit-details-marker{display:none}
@@ -204,9 +213,12 @@ tbody tr:hover{background:var(--accent-soft)}
     <label class="chk"><input type="checkbox" id="fUnder"> Below average value</label>
     <label class="chk"><input type="checkbox" id="fDiv"> Pays dividend</label>
     <label class="chk"><input type="checkbox" id="fMine"> Added by me</label>
+    <button class="btn" type="button" id="addFilter">+ Add filter</button>
     <details class="colmenu" id="colMenu"><summary class="btn">Ratio columns</summary><div class="colpanel" id="colPanel"></div></details>
     <span class="count" id="count"></span>
   </div>
+
+  <div class="fbar" id="fbar" hidden></div>
 
   <section class="sheet" aria-label="Screener">
     <div class="scroll">
@@ -484,7 +496,9 @@ function filtered(){
     if (ind && s.sub !== ind) return false;
     if (of && s.o?.f !== of) return false;
     if (dv && !(s.div > 0)) return false;
-    if (under){ const R = RES.get(s.t); if (!(R?.upside > 0)) return false; }
+    const R = RES.get(s.t);
+    if (under && !(R?.upside > 0)) return false;
+    if (FILTERS.length && !passFilters(s, R)) return false;
     return true;
   });
 }
@@ -529,6 +543,83 @@ $("#colPanel").addEventListener("click", e => { const b = e.target.closest("[dat
   renderColMenu(); saveCols(); });
 function saveCols(){ try{ localStorage.setItem("vls-cols", JSON.stringify([...VIS])); }catch(e){} renderTable(); }
 renderColMenu();
+
+/* ------------------------------------------------------------ numeric filters */
+// Units decide how typed values are read: pct fields are entered as percents, money in dollars, bn in $ billions.
+const UNITS = {p:"money", graham:"money", dcf:"money", mult:"money", book:"money", avg:"money", upside:"pct",
+  pe:"num", ipe:"num", dyl:"pct", ccr:"pct", fpe:"num", peg:"num", pb:"num", ps:"num", eve:"num", ey:"pct", fcfy:"pct",
+  roe:"pct", roa:"pct", gm:"pct", om:"pct", nm:"pct", de:"x", cr:"num", qr:"num", pay:"pct", beta:"num", hi52:"pct"};
+const EXTRA_FIELDS = [
+  {k:"mc", h:"Market cap", u:"bn", v:s=>s.mc},
+  {k:"eps", h:"EPS (TTM)", u:"money", v:s=>s.eps},
+  {k:"gEps", h:"EPS growth used", u:"pct", v:(s,R)=>R?.g?.eps},
+  {k:"gBv", h:"Book value growth used", u:"pct", v:(s,R)=>R?.g?.bv},
+  {k:"gDiv", h:"Dividend growth used", u:"pct", v:(s,R)=>R?.g?.div},
+  {k:"ccd", h:"CC call delta", u:"num", v:(s,R)=>R?.cc?.pick?.delta},
+];
+const FIELDS = [...COLS.filter(c => UNITS[c.k]).map(c => ({k:c.k, h:c.k==="upside"?"Avg value vs price":c.h, u:UNITS[c.k], v:c.v})), ...EXTRA_FIELDS];
+const FIELD = new Map(FIELDS.map(f => [f.k, f]));
+const UNIT_LABEL = {money:"$", pct:"%", num:"", x:"x", bn:"$B"};
+const toRaw = (u, x) => u === "pct" ? x/100 : u === "bn" ? x*1e9 : x;
+let FILTERS = [];
+try{ const v = JSON.parse(localStorage.getItem("vls-filters")||"null"); if (Array.isArray(v)) FILTERS = v.filter(f => FIELD.has(f.k)); }catch(e){}
+
+function passFilters(s, R){
+  for (const f of FILTERS){
+    const fd = FIELD.get(f.k); if (!fd) continue;
+    const a = parseFloat(f.a), b = parseFloat(f.b);
+    const hasA = isFinite(a), hasB = isFinite(b);
+    if (!hasA && !(f.op === "between" && hasB)) continue;   // incomplete filter: ignore
+    const v = fd.v(s, R);
+    if (v == null || !isFinite(v)) return false;
+    const A = toRaw(fd.u, a), B = toRaw(fd.u, b);
+    if (f.op === "above" && !(v > A)) return false;
+    if (f.op === "below" && !(v < A)) return false;
+    if (f.op === "between"){
+      const lo = hasA && hasB ? Math.min(A,B) : hasA ? A : -Infinity, hi = hasA && hasB ? Math.max(A,B) : hasB ? B : Infinity;
+      if (!(v >= lo && v <= hi)) return false;
+    }
+  }
+  return true;
+}
+function renderFilters(){
+  const el = $("#fbar");
+  if (!FILTERS.length){ el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  const opts = sel => FIELDS.map(f => `<option value="${f.k}" ${f.k===sel?"selected":""}>${esc(f.h)}</option>`).join("");
+  el.innerHTML = FILTERS.map((f, i) => { const u = UNIT_LABEL[FIELD.get(f.k)?.u] || "";
+    return `<div class="frow" data-i="${i}">
+      <select data-f="k" aria-label="Column">${opts(f.k)}</select>
+      <select data-f="op" aria-label="Condition"><option value="above" ${f.op==="above"?"selected":""}>above</option><option value="below" ${f.op==="below"?"selected":""}>below</option><option value="between" ${f.op==="between"?"selected":""}>between</option></select>
+      <input data-f="a" type="number" step="any" inputmode="decimal" value="${esc(f.a??"")}" aria-label="${f.op==="between"?"From":"Value"}" placeholder="${f.op==="between"?"from":"value"}">
+      ${f.op==="between"?`<span class="and">and</span><input data-f="b" type="number" step="any" inputmode="decimal" value="${esc(f.b??"")}" aria-label="To" placeholder="to">`:""}
+      <span class="u">${esc(u)}</span>
+      <button class="x" type="button" data-rm="${i}" aria-label="Remove filter">Remove</button>
+    </div>`; }).join("")
+    + `<div class="foot"><span class="note">Percent fields take percents (enter 3 for 3%). Market cap is in billions. All filters must match; stocks missing a value are left out.</span><button class="btn small" type="button" id="clearFilters">Clear all filters</button></div>`;
+}
+let fT = null;
+function filtersChanged(redraw){
+  try{ localStorage.setItem("vls-filters", JSON.stringify(FILTERS)); }catch(e){}
+  if (redraw) renderFilters();
+  clearTimeout(fT); fT = setTimeout(renderTable, 120);
+}
+$("#addFilter").addEventListener("click", () => {
+  FILTERS.push({k:"upside", op:"above", a:"", b:""}); filtersChanged(true);
+  const rows = $("#fbar").querySelectorAll(".frow"); rows[rows.length-1]?.querySelector("[data-f=k]")?.focus();
+});
+$("#fbar").addEventListener("input", e => {
+  const row = e.target.closest(".frow"); if (!row) return;
+  const f = FILTERS[+row.dataset.i], key = e.target.dataset.f; if (!f || !key) return;
+  f[key] = e.target.value;
+  filtersChanged(key === "k" || key === "op");
+});
+$("#fbar").addEventListener("click", e => {
+  const rm = e.target.closest("[data-rm]");
+  if (rm){ FILTERS.splice(+rm.dataset.rm, 1); filtersChanged(true); return; }
+  if (e.target.closest("#clearFilters")){ FILTERS = []; filtersChanged(true); }
+});
+renderFilters();
 
 /* ------------------------------------------------------------ recalculation */
 function readInputs(){
