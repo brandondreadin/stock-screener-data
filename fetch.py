@@ -147,7 +147,7 @@ def split_factor_after(splits, filed):
     return f
 
 
-def sec_history(cik, splits):
+def sec_history(cik, splits, fallback_shares=None):
     url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
     for attempt in range(3):
         try:
@@ -186,6 +186,12 @@ def sec_history(cik, splits):
         v = inst["equity"].get(end)
         row["equity"] = v[0] if v else None
         sh = row["sharesOut"] or row["dilutedShares"]
+        if not sh and fallback_shares:
+            # No share counts in XBRL (e.g. multi-class filers): approximate with today's share count
+            sh = fallback_shares
+            row["sharesApprox"] = True
+            if row["eps"] is None and row["netIncome"] is not None:
+                row["eps"] = round(row["netIncome"] / sh, 4)
         row["bvps"] = round(row["equity"] / sh, 4) if row["equity"] is not None and sh else None
         if row["ocf"] is not None:
             row["fcf"] = row["ocf"] - (row["capex"] or 0)
@@ -205,7 +211,7 @@ INFO_KEYS = [
     "returnOnEquity", "returnOnAssets", "debtToEquity", "currentRatio", "quickRatio",
     "grossMargins", "operatingMargins", "profitMargins", "ebitdaMargins", "enterpriseToEbitda", "enterpriseToRevenue",
     "freeCashflow", "operatingCashflow", "totalCash", "totalDebt", "totalRevenue", "ebitda",
-    "trailingEps", "forwardEps", "bookValue", "sharesOutstanding", "revenueGrowth", "earningsGrowth",
+    "trailingEps", "forwardEps", "bookValue", "sharesOutstanding", "impliedSharesOutstanding", "revenueGrowth", "earningsGrowth",
     "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "fiftyDayAverage", "twoHundredDayAverage",
     "targetMeanPrice", "targetLowPrice", "targetHighPrice", "recommendationKey", "numberOfAnalystOpinions",
     "industry", "sector", "fullTimeEmployees", "website", "longBusinessSummary", "exDividendDate",
@@ -311,7 +317,7 @@ def build(c):
         y = {"splits": []}
         rec["yahoo"] = None
     try:
-        rec["history"] = sec_history(c["cik"], y.get("splits", []))
+        rec["history"] = sec_history(c["cik"], y.get("splits", []), y.get("impliedSharesOutstanding") or y.get("sharesOutstanding"))
     except Exception as e:
         errs.append(f"sec: {e}")
         rec["history"] = None
