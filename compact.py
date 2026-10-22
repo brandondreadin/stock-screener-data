@@ -7,7 +7,7 @@ from fetch import classify_expirations
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else "data/stocks.json"
 OUT = "build"
-PER_CHUNK = 45
+PER_CHUNK = 35
 
 
 def r(x, n=4):
