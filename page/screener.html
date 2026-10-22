@@ -69,6 +69,15 @@ button,input,select{font:inherit;color:inherit}
 .filters select{border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:8px 10px;max-width:100%}
 .chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.86rem}
 .count{color:var(--muted);font-size:.84rem;margin-left:auto}
+.colmenu{position:relative}
+.colmenu summary{list-style:none}
+.colmenu summary::-webkit-details-marker{display:none}
+.colpanel{position:absolute;z-index:5;top:calc(100% + 6px);left:0;width:min(360px,calc(100vw - 32px));max-height:60vh;overflow-y:auto;background:var(--sheet);border:1px solid var(--rule);border-radius:9px;box-shadow:var(--shadow);padding:10px;display:grid;gap:6px}
+.colpanel .chk{align-items:flex-start;color:var(--ink)}
+.colpanel .chk .note{display:block}
+thead th:first-child,tbody td:first-child{position:sticky;left:0;background:var(--sheet);z-index:2}
+thead th:first-child{z-index:3}
+tbody tr:hover td:first-child{background:var(--accent-soft)}
 
 .sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
 .scroll{overflow-x:auto;max-height:72vh;overflow-y:auto}
@@ -193,6 +202,7 @@ tbody tr:hover{background:var(--accent-soft)}
     <label class="chk"><input type="checkbox" id="fUnder"> Below average value</label>
     <label class="chk"><input type="checkbox" id="fDiv"> Pays dividend</label>
     <label class="chk"><input type="checkbox" id="fMine"> Added by me</label>
+    <details class="colmenu" id="colMenu"><summary class="btn">Ratio columns</summary><div class="colpanel" id="colPanel"></div></details>
     <span class="count" id="count"></span>
   </div>
 
@@ -375,6 +385,34 @@ function calc(s, A){
 }
 
 /* ------------------------------------------------------------ table */
+// Analyst ratio columns; the Columns menu shows or hides each one
+const rnum = (v, d) => v == null || !isFinite(v) ? `<span class="na">–</span>` : num(v, d);
+const rpct = (v, d=1) => v == null || !isFinite(v) ? `<span class="na">–</span>` : pct(v, d);
+const fcfY = s => { const f = fcfLast(s); return f != null && s.p ? f/s.p : null; };
+const RATIO_COLS = [
+  {k:"fpe",  h:"Fwd P/E",    tip:"Price / forward 12-month EPS estimate", on:true,  v:s=>s.r?.fpe, f:s=>rnum(s.r?.fpe,1)},
+  {k:"peg",  h:"PEG",        tip:"P/E divided by expected EPS growth", on:true,  v:s=>s.r?.peg, f:s=>rnum(s.r?.peg,2)},
+  {k:"pb",   h:"P/B",        tip:"Price / book value per share", on:true,  v:s=>s.r?.pb, f:s=>rnum(s.r?.pb,2)},
+  {k:"ps",   h:"P/S",        tip:"Price / sales per share (trailing 12 months)", on:false, v:s=>s.r?.ps, f:s=>rnum(s.r?.ps,2)},
+  {k:"eve",  h:"EV/EBITDA",  tip:"Enterprise value / EBITDA", on:true,  v:s=>s.r?.eve, f:s=>rnum(s.r?.eve,1)},
+  {k:"ey",   h:"Earn. yld",  tip:"Trailing EPS / price (inverse of P/E)", on:false, v:s=>s.eps&&s.p?s.eps/s.p:null, f:s=>rpct(s.eps&&s.p?s.eps/s.p:null)},
+  {k:"fcfy", h:"FCF yld",    tip:"Latest 10-K free cash flow per share / price", on:true,  v:fcfY, f:s=>rpct(fcfY(s))},
+  {k:"roe",  h:"ROE",        tip:"Return on equity", on:true,  v:s=>s.r?.roe, f:s=>rpct(s.r?.roe)},
+  {k:"roa",  h:"ROA",        tip:"Return on assets", on:false, v:s=>s.r?.roa, f:s=>rpct(s.r?.roa)},
+  {k:"gm",   h:"Gross mgn",  tip:"Gross margin", on:false, v:s=>s.r?.gm, f:s=>rpct(s.r?.gm)},
+  {k:"om",   h:"Op. mgn",    tip:"Operating margin", on:false, v:s=>s.r?.om, f:s=>rpct(s.r?.om)},
+  {k:"nm",   h:"Net mgn",    tip:"Net profit margin", on:true,  v:s=>s.r?.nm, f:s=>rpct(s.r?.nm)},
+  {k:"de",   h:"Debt/Eq",    tip:"Total debt / shareholders' equity", on:true,  v:s=>s.r?.de!=null?s.r.de/100:null, f:s=>s.r?.de!=null?num(s.r.de/100,2)+"x":`<span class="na">–</span>`},
+  {k:"cr",   h:"Current",    tip:"Current ratio: current assets / current liabilities", on:false, v:s=>s.r?.cr, f:s=>rnum(s.r?.cr,2)},
+  {k:"qr",   h:"Quick",      tip:"Quick ratio: liquid assets / current liabilities", on:false, v:s=>s.r?.qr, f:s=>rnum(s.r?.qr,2)},
+  {k:"pay",  h:"Payout",     tip:"Dividends / earnings", on:false, v:s=>s.r?.pay, f:s=>rpct(s.r?.pay,0)},
+  {k:"beta", h:"Beta",       tip:"Volatility relative to the market", on:false, v:s=>s.r?.beta, f:s=>rnum(s.r?.beta,2)},
+  {k:"hi52", h:"Off 52w high", tip:"Price relative to the 52-week high", on:false, v:s=>s.r?.h52&&s.p?s.p/s.r.h52-1:null, f:s=>rpct(s.r?.h52&&s.p?s.p/s.r.h52-1:null,0)},
+].map(c => ({...c, opt:true}));
+let VIS = new Set(RATIO_COLS.filter(c=>c.on).map(c=>c.k));
+try{ const v = JSON.parse(localStorage.getItem("vls-cols")||"null"); if (Array.isArray(v)) VIS = new Set(v); }catch(e){}
+const visCols = () => COLS.filter(c => !c.opt || VIS.has(c.k));
+
 const COLS = [
   {k:"t", h:"Stock", l:true, v:s=>s.t, f:s=>`<span class="tk">${esc(s.t)}</span>${s.c?` <span class="pill g">Added</span>`:""}<span class="nm" title="${esc(s.n)}">${esc(s.n)}</span>`},
   {k:"sec", h:"Sector / industry", l:true, v:s=>s.sec+" "+s.sub, f:s=>`<span class="nm" style="max-width:190px;color:var(--ink)" title="${esc(s.sec)}">${esc(s.sec)}</span><span class="nm" style="max-width:190px" title="${esc(s.sub)}">${esc(s.sub)}</span>`},
@@ -388,8 +426,8 @@ const COLS = [
   {k:"upside", h:"vs price", v:(s,R)=>R?.upside, f:(s,R)=>R?.upside==null?`<span class="na">–</span>`:`<span class="${R.upside>=0?"up":"down"}">${R.upside>=0?"+":""}${pct(R.upside,0)}</span>`},
   {k:"pe", h:"P/E", v:s=>s.r?.pe, f:s=>num(s.r?.pe,1)},
   {k:"dyl", h:"Div yld", v:s=>s.div&&s.p?s.div/s.p:0, f:s=>s.div>0&&s.p?pct(s.div/s.p,2):`<span class="na">–</span>`},
+  ...RATIO_COLS,
   {k:"opt", h:"Options", v:s=>({Weekly:3,Monthly:2,Quarterly:1}[s.o?.f]||0), f:s=>optPill(s.o?.f)},
-  {k:"cc", h:"30d call, ann.", v:s=>s.o?.cs?.ann, f:s=>s.o?.cs?.ann!=null?pct(s.o.cs.ann,1):`<span class="na">–</span>`},
   {k:"act", h:"", nosort:true, f:s=>`<button class="btn small" type="button" data-recalc="${esc(s.t)}" title="Recalculate ${esc(s.t)} with the current assumptions">Recalc</button>`},
 ];
 function fcfLast(s){ const h = [...(s.h||[])].reverse().find(x=>x.fcf!=null); return h ? h.fcf : null; }
@@ -399,7 +437,7 @@ function cell(m, p){ const v = m?.value; if (v==null || !isFinite(v) || v<=0) re
 function optPill(f){ if (!f || f==="None") return `<span class="pill">None</span>`; const c={Weekly:"w",Monthly:"m",Quarterly:"q"}[f]||""; return `<span class="pill ${c}">${esc(f)}</span>`; }
 
 function renderHead(){
-  $("#thead").innerHTML = COLS.map(c => `<th class="${c.l?"l":""}" data-k="${c.k}" ${c.k===sortKey?`aria-sort="${sortDir>0?"ascending":"descending"}"`:""} scope="col">${esc(c.h)}${c.k===sortKey?` <span class="ar">${sortDir>0?"▲":"▼"}</span>`:""}</th>`).join("");
+  $("#thead").innerHTML = visCols().map(c => `<th class="${c.l?"l":""}" data-k="${c.k}" ${c.k===sortKey?`aria-sort="${sortDir>0?"ascending":"descending"}"`:""} scope="col"${c.tip?` title="${esc(c.tip)}"`:""}>${esc(c.h)}${c.k===sortKey?` <span class="ar">${sortDir>0?"▲":"▼"}</span>`:""}</th>`).join("");
 }
 function filtered(){
   const q = $("#q").value.trim().toLowerCase(), sec = $("#fSector").value, ind = $("#fInd").value, of = $("#fOpt").value;
@@ -419,13 +457,14 @@ function filtered(){
 function renderTable(){
   renderHead();
   if (!STOCKS.length){ return; }
-  const col = COLS.find(c=>c.k===sortKey) || COLS[8];
+  const col = visCols().find(c=>c.k===sortKey) || COLS.find(c=>c.k==="upside");
   const rows = filtered().map(s => [s, RES.get(s.t)]);
   rows.sort((a,b) => { const va = col.v(a[0],a[1]), vb = col.v(b[0],b[1]);
     if (va==null && vb==null) return 0; if (va==null) return 1; if (vb==null) return -1;
     return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * sortDir; });
-  $("#tbody").innerHTML = rows.length ? rows.map(([s,R]) => `<tr data-t="${esc(s.t)}" tabindex="0">${COLS.map(c=>`<td class="${c.l?"l":"num"}">${c.f(s,R)}</td>`).join("")}</tr>`).join("")
-    : `<tr><td colspan="${COLS.length}" class="empty">No stocks match these filters.</td></tr>`;
+  const VC = visCols();
+  $("#tbody").innerHTML = rows.length ? rows.map(([s,R]) => `<tr data-t="${esc(s.t)}" tabindex="0">${VC.map(c=>`<td class="${c.l?"l":"num"}">${c.f(s,R)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${VC.length}" class="empty">No stocks match these filters.</td></tr>`;
   $("#count").textContent = `${rows.length} of ${STOCKS.length} stocks`;
 }
 $("#thead").addEventListener("click", e => { const th = e.target.closest("th"); if (!th) return; const c = COLS.find(x=>x.k===th.dataset.k); if (!c || c.nosort) return;
@@ -444,6 +483,18 @@ function fillIndustries(){
   $("#fInd").innerHTML = `<option value="">All industries</option>` + subs.map(x=>`<option ${x===cur?"selected":""}>${esc(x)}</option>`).join("");
   if (cur && !subs.includes(cur)) $("#fInd").value = "";
 }
+
+function renderColMenu(){
+  $("#colPanel").innerHTML = RATIO_COLS.map(c => `<label class="chk"><input type="checkbox" data-col="${c.k}" ${VIS.has(c.k)?"checked":""}> <span><b>${esc(c.h)}</b> <span class="note">${esc(c.tip)}</span></span></label>`).join("")
+    + `<div style="display:flex;gap:6px;margin-top:6px"><button class="btn small" type="button" data-cols="all">Show all</button><button class="btn small" type="button" data-cols="none">Hide all</button><button class="btn small" type="button" data-cols="default">Default</button></div>`;
+}
+$("#colPanel").addEventListener("change", e => { const cb = e.target.closest("[data-col]"); if (!cb) return;
+  cb.checked ? VIS.add(cb.dataset.col) : VIS.delete(cb.dataset.col); saveCols(); });
+$("#colPanel").addEventListener("click", e => { const b = e.target.closest("[data-cols]"); if (!b) return;
+  const m = b.dataset.cols; VIS = new Set(m==="all" ? RATIO_COLS.map(c=>c.k) : m==="none" ? [] : RATIO_COLS.filter(c=>c.on).map(c=>c.k));
+  renderColMenu(); saveCols(); });
+function saveCols(){ try{ localStorage.setItem("vls-cols", JSON.stringify([...VIS])); }catch(e){} renderTable(); }
+renderColMenu();
 
 /* ------------------------------------------------------------ recalculation */
 function readInputs(){
