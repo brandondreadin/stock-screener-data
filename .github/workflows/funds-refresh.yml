@@ -9,10 +9,6 @@ on:
         description: "Tickers to refresh (space or comma separated). Leave blank for every fund in funds/watchlist.txt."
         required: false
         default: ""
-      probe:
-        description: "Diagnostics only"
-        required: false
-        default: ""
 
 permissions:
   contents: write
@@ -31,16 +27,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -q yfinance pandas requests
-      - if: ${{ github.event.inputs.probe != '' }}
-        run: |
-          python funds/probe.py > funds/probe_out.txt 2>&1 || true
-          git config user.name "stock-screener-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add funds/probe_out.txt && git commit -qm "Probe output" && git pull --rebase -q && git push
-      - if: ${{ github.event.inputs.probe == '' }}
-        run: python funds/fetch_funds.py ${{ github.event.inputs.tickers }}
-      - if: ${{ github.event.inputs.probe == '' }}
-        name: Commit data
+      - run: python funds/fetch_funds.py ${{ github.event.inputs.tickers }}
+      - name: Commit data
         run: |
           git config user.name "stock-screener-bot"
           git config user.email "actions@users.noreply.github.com"

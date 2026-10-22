@@ -73,8 +73,14 @@ def compact(f, prof):
         er, er_src = y["netExpenseRatio"] / 100, "Yahoo (net)"
     if er is None and (f.get("hold") or {}).get("erReport") is not None:
         er, er_src = f["hold"]["erReport"], "Yahoo (annual report)"
+    snap = prof.get("navSnap")
+    if struct == "CEF" and snap and (not nav.get("d") or nav.get("d") < snap["d"]):
+        nav = {"v": snap["v"], "d": snap["d"], "src": snap["src"]}  # sponsor NAV when Yahoo has no daily NAV series
+    if struct == "Baby bond":
+        nav = {}  # a note's issuer book value is not a NAV
     navv = nav.get("v")
-    prem = (p / navv - 1) if p and navv and struct not in ("Baby bond",) else None
+    # ETFs trade within pennies of NAV; Yahoo's NAV is a day older than the live price, so a premium there is noise
+    prem = (p / navv - 1) if p and navv and struct in ("CEF", "BDC") else None
     aum = y.get("totalAssets") or y.get("marketCap")
     rec = {
         "t": t, "n": prof.get("name") or y.get("longName") or y.get("shortName") or t,

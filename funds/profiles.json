@@ -168,7 +168,12 @@
   "erAsOf": "2025-12-31",
   "levPct": 0.3308,
   "policy": "Managed distribution",
-  "src": "CEF Connect, checked 2026-10-22"
+  "src": "CEF Connect, checked 2026-10-22",
+  "navSnap": {
+   "v": 6.96,
+   "d": "2026-10-21",
+   "src": "CEF Connect"
+  }
  },
  "ADAMH": {
   "name": "Adamas Trust 9.875% Senior Notes due 2030",
@@ -223,7 +228,12 @@
   "erAsOf": "2025-12-31",
   "levPct": 0.3475,
   "policy": "Managed distribution",
-  "src": "CEF Connect, checked 2026-10-22"
+  "src": "CEF Connect, checked 2026-10-22",
+  "navSnap": {
+   "v": 15.83,
+   "d": "2026-10-21",
+   "src": "CEF Connect"
+  }
  },
  "IYRI": {
   "name": "NEOS Real Estate High Income ETF",
@@ -323,7 +333,12 @@
   "erAsOf": "2025-12-31",
   "levPct": 0.0,
   "policy": "Income only (8% of NAV annual commitment)",
-  "src": "CEF Connect, checked 2026-10-22"
+  "src": "CEF Connect, checked 2026-10-22",
+  "navSnap": {
+   "v": 26.59,
+   "d": "2026-10-21",
+   "src": "CEF Connect"
+  }
  },
  "KQQQ": {
   "name": "Kurv Technology Titans Select ETF",
@@ -548,7 +563,12 @@
   "erAsOf": "2026-09-30",
   "levPct": 0.0104,
   "policy": "Managed distribution",
-  "src": "CEF Connect, checked 2026-10-22"
+  "src": "CEF Connect, checked 2026-10-22",
+  "navSnap": {
+   "v": 20.82,
+   "d": "2026-10-21",
+   "src": "CEF Connect"
+  }
  },
  "PDI": {
   "name": "PIMCO Dynamic Income Fund",

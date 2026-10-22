@@ -1,0 +1,992 @@
+<title>Fund Ledger Screener</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a ledger workbench, shared with the Value Ledger. Tax assumptions on top, fund table as the main sheet, a detail sheet slides over from the right. */
+:root{
+  --paper:#f5f6f2; --sheet:#ffffff; --ink:#15211c; --muted:#5d6b64; --rule:#dde2dc; --rule-2:#eceee9;
+  --accent:#0d6a55; --accent-ink:#ffffff; --accent-soft:#e1efe9;
+  --brass:#9a6b1c; --brass-soft:#f6ecd8;
+  --good:#1d7a45; --good-soft:#e2f2e7; --bad:#b03a2e; --bad-soft:#f8e3df; --neutral-soft:#eef0ec;
+  --shadow:0 18px 50px rgba(20,33,28,.18);
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Public Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0f1513; --sheet:#151d1a; --ink:#e4ebe7; --muted:#93a39b; --rule:#26322d; --rule-2:#1c2522;
+  --accent:#4cc2a1; --accent-ink:#06231b; --accent-soft:#183a31;
+  --brass:#d9a54b; --brass-soft:#3a2e17;
+  --good:#5ccf8a; --good-soft:#163a26; --bad:#f08a7c; --bad-soft:#40201b; --neutral-soft:#1e2724;
+  --shadow:0 18px 50px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0f1513; --sheet:#151d1a; --ink:#e4ebe7; --muted:#93a39b; --rule:#26322d; --rule-2:#1c2522;
+  --accent:#4cc2a1; --accent-ink:#06231b; --accent-soft:#183a31;
+  --brass:#d9a54b; --brass-soft:#3a2e17;
+  --good:#5ccf8a; --good-soft:#163a26; --bad:#f08a7c; --bad-soft:#40201b; --neutral-soft:#1e2724;
+  --shadow:0 18px 50px rgba(0,0,0,.5); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px;max-width:1480px;margin:0 auto;display:grid;gap:16px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:1.65rem;font-weight:700}
+h2{font-size:1.25rem;font-weight:700}
+h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;font-family:var(--f-body);font-weight:600;color:var(--muted)}
+.mono,td.num,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.top .sub{color:var(--muted);font-size:.86rem;display:flex;flex-wrap:wrap;gap:6px 14px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:middle}
+.dot.live{background:var(--good)}
+
+.assume{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:14px;display:grid;gap:12px}
+.assume .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;align-items:end}
+.field{display:grid;gap:4px;min-width:0}
+.field label{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.field input,.field select{border:1px solid var(--rule);background:var(--paper);border-radius:6px;padding:7px 9px;width:100%;min-width:0}
+.pct{position:relative}
+.pct input{padding-right:24px;font-family:var(--f-mono)}
+.pct::after{content:"%";position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-family:var(--f-mono)}
+.pct.x::after{content:"× price"}
+.pct.x input{padding-right:62px}
+.assume .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.assume .hint{color:var(--muted);font-size:.82rem}
+.stale{color:var(--brass);font-weight:600}
+
+.btn{border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:7px 12px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.small{padding:3px 8px;font-size:.78rem}
+.btn[disabled]{opacity:.5;cursor:default}
+
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.filters input[type=search]{flex:1 1 220px;min-width:0;border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:8px 10px}
+.filters select{border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:8px 10px;max-width:100%}
+.chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.86rem}
+.count{color:var(--muted);font-size:.84rem;margin-left:auto}
+.fbar{display:grid;gap:8px;background:var(--sheet);border:1px solid var(--rule);border-radius:10px;padding:10px 12px}
+.frow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.frow select,.frow input{border:1px solid var(--rule);background:var(--paper);border-radius:6px;padding:6px 8px;min-width:0}
+.frow input{width:96px;font-family:var(--f-mono)}
+.frow .u{color:var(--muted);font-size:.8rem;min-width:24px}
+.frow .and{color:var(--muted);font-size:.84rem}
+.frow .x{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:6px}
+.frow .x:hover{color:var(--bad);background:var(--bad-soft)}
+.fbar .foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.colmenu{position:relative}
+.colmenu summary{list-style:none}
+.colmenu summary::-webkit-details-marker{display:none}
+.colpanel{position:absolute;z-index:5;top:calc(100% + 6px);left:0;width:min(360px,calc(100vw - 32px));max-height:60vh;overflow-y:auto;background:var(--sheet);border:1px solid var(--rule);border-radius:9px;box-shadow:var(--shadow);padding:10px;display:grid;gap:6px}
+.colpanel .chk{align-items:flex-start;color:var(--ink)}
+.colpanel .chk .note{display:block}
+thead th:first-child,tbody td:first-child{position:sticky;left:0;background:var(--sheet);z-index:2}
+thead th:first-child{z-index:3}
+tbody tr:hover td:first-child{background:var(--accent-soft)}
+
+.sheet{background:var(--sheet);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.scroll{overflow-x:auto;max-height:72vh;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem}
+thead th{position:sticky;top:0;background:var(--sheet);z-index:1;text-align:right;font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 10px;border-bottom:1px solid var(--rule);white-space:nowrap;cursor:pointer;user-select:none}
+thead th.l{text-align:left}
+thead th[aria-sort] .ar{color:var(--accent)}
+tbody td{padding:7px 10px;border-bottom:1px solid var(--rule-2);text-align:right;white-space:nowrap}
+tbody td.l{text-align:left}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--accent-soft)}
+.tk{font-family:var(--f-mono);font-weight:500}
+.nm{color:var(--muted);font-size:.78rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;display:block}
+.na{color:var(--muted)}
+.up{color:var(--good);font-weight:600}.down{color:var(--bad);font-weight:600}
+.pill{display:inline-block;font-size:.7rem;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:var(--neutral-soft);color:var(--muted)}
+.pill.w{background:var(--accent-soft);color:var(--accent)}
+.pill.m{background:var(--brass-soft);color:var(--brass)}
+.pill.q{background:var(--neutral-soft);color:var(--muted)}
+.pill.g{background:var(--good-soft);color:var(--good)}
+.pill.b{background:var(--bad-soft);color:var(--bad)}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.addform{display:flex;gap:6px;align-items:center}
+.addform input{width:120px;border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:7px 10px;font-family:var(--f-mono);text-transform:uppercase}
+.wl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.84rem}
+.wl .chip{display:inline-flex;align-items:center;gap:8px;padding:4px 6px 4px 10px;border-radius:999px;background:var(--brass-soft);color:var(--ink)}
+.wl .chip.bad{background:var(--bad-soft)}
+.wl .chip button{border:0;background:transparent;cursor:pointer;color:var(--muted);font-size:.78rem;padding:2px 6px;border-radius:999px}
+.wl .chip button:hover{color:var(--ink)}
+
+/* detail sheet */
+.overlay{position:fixed;inset:0;background:rgba(10,18,15,.35);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(860px,100%);background:var(--paper);z-index:21;box-shadow:var(--shadow);display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.dhead{padding:16px max(16px,env(safe-area-inset-left,0px)) 12px 18px;border-bottom:1px solid var(--rule);display:grid;gap:8px;background:var(--sheet)}
+.dhead .r1{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.dhead .px{font-family:var(--f-mono);font-size:1.4rem}
+.dhead .meta{color:var(--muted);font-size:.84rem;display:flex;flex-wrap:wrap;gap:4px 12px}
+.dbody{overflow-y:auto;padding:16px 18px 40px;display:grid;gap:22px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{border:0;background:transparent;padding:6px 10px;border-radius:6px;cursor:pointer;color:var(--muted);font-weight:600;font-size:.84rem}
+.tab[aria-selected=true]{background:var(--accent-soft);color:var(--accent)}
+.vals{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.val{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;padding:12px;display:grid;gap:4px;min-width:0}
+.val .k{font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.val .v{font-family:var(--f-mono);font-size:1.3rem}
+.val .d{font-size:.8rem}
+.val.avg{border-color:var(--accent)}
+.val.off .v{text-decoration:line-through;color:var(--muted)}
+.xcl{color:var(--muted);text-decoration:line-through}
+.use{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)}
+.calc{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;overflow:hidden}
+.calc details{border-top:1px solid var(--rule-2)}
+.calc details:first-child{border-top:0}
+.calc summary{padding:10px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;font-weight:600}
+.calc .inner{padding:0 12px 12px;display:grid;gap:8px;font-size:.86rem}
+.formula{font-family:var(--f-mono);font-size:.8rem;background:var(--paper);border:1px solid var(--rule-2);border-radius:6px;padding:8px;overflow-x:auto;white-space:pre}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 16px}
+.kv div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dotted var(--rule);padding:3px 0;min-width:0}
+.kv span:first-child{color:var(--muted)}
+.kv span:last-child{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.note{color:var(--muted);font-size:.8rem}
+.ovr{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:end}
+.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.chart{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;padding:10px;min-width:0}
+.chart svg{width:100%;height:auto;display:block}
+.hist{overflow-x:auto;background:var(--sheet);border:1px solid var(--rule);border-radius:9px}
+.hist table{font-size:.8rem}
+.hist td,.hist th{padding:6px 9px}
+.hist thead th{position:static;cursor:default}
+.analysis{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;padding:16px;display:grid;gap:10px;line-height:1.6}
+.analysis h4{font-family:var(--f-display);font-size:1.02rem;margin:8px 0 0}
+.analysis p,.analysis ul{margin:0;max-width:72ch}
+.analysis ul{padding-left:20px}
+.summary{max-width:72ch;line-height:1.6}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:8px;z-index:40;font-size:.86rem;max-width:calc(100% - 32px)}
+@media (max-width:640px){h1{font-size:1.35rem}.dhead .px{font-size:1.15rem}.scroll{max-height:none}}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+<style>
+/* Fund-specific additions on top of the shared ledger tokens */
+.sbox{display:grid;grid-template-columns:auto repeat(3,34px);grid-template-rows:auto repeat(3,34px);gap:3px;font-size:.66rem;color:var(--muted);align-items:center;justify-items:center}
+.sbox .c{width:34px;height:34px;border:1px solid var(--rule);border-radius:4px;background:var(--paper)}
+.sbox .c.on{background:var(--accent);border-color:var(--accent)}
+.sbox .rl{justify-self:end;padding-right:4px}
+.stywrap{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.bars{display:grid;gap:6px}
+.bar{display:grid;grid-template-columns:minmax(110px,170px) 1fr 52px;gap:8px;align-items:center;font-size:.82rem}
+.bar .tr{height:9px;background:var(--rule-2);border-radius:999px;overflow:hidden}
+.bar .fl{height:100%;background:var(--accent);border-radius:999px}
+.bar .pv{font-family:var(--f-mono);text-align:right}
+.mix{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;align-items:end}
+.mix .field input{font-family:var(--f-mono)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:.76rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.prose{display:grid;gap:8px;max-width:72ch;line-height:1.6}
+.prose p{margin:0}
+.chart.wide{grid-column:1/-1}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div style="display:grid;gap:4px;min-width:0">
+      <h1>Fund Ledger Screener</h1>
+      <div class="sub">
+        <span id="srcStatus"><span class="dot"></span>Connecting to data</span>
+        <span id="dataAsOf"></span>
+        <span id="fundCount"></span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <form class="addform" id="addForm" autocomplete="off">
+        <label for="addT" class="note" style="margin-right:2px">Add fund</label>
+        <input id="addT" type="text" maxlength="8" placeholder="Ticker">
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+      <button class="btn" id="refreshAll" type="button" title="Queue a fresh pull of prices, NAVs and distributions for every fund">Refresh all data</button>
+    </div>
+  </header>
+  <div class="wl" id="wl" hidden></div>
+
+  <section class="assume" aria-label="Assumptions">
+    <div class="grid">
+      <div class="field"><label for="inFo">Federal ordinary rate</label><div class="pct"><input id="inFo" type="number" step="1" min="0" max="50" value="24"></div></div>
+      <div class="field"><label for="inFc">Qualified / LTCG rate</label><div class="pct"><input id="inFc" type="number" step="1" min="0" max="30" value="15"></div></div>
+      <div class="field"><label for="inSt">State rate</label><div class="pct"><input id="inSt" type="number" step="0.25" min="0" max="15" value="0"></div></div>
+      <div class="field"><label for="inNiit">Net investment income tax</label><select id="inNiit"><option value="no">Not subject (3.8% off)</option><option value="yes">Subject (add 3.8%)</option></select></div>
+      <div class="field"><label for="inYb">Yield basis</label><select id="inYb"><option value="fwd">Forward (latest regular × frequency)</option><option value="ttm">Trailing 12 months paid</option></select></div>
+      <div class="field"><label for="inAmt">Income on an investment of</label><input id="inAmt" type="number" step="1000" min="100" value="10000" class="mono"></div>
+      <div class="field"><label for="inD">Covered call delta</label><input id="inD" type="number" step="0.05" min="0.05" max="0.95" value="0.30" class="mono"></div>
+      <div class="field"><label for="inP">Call premium at</label><select id="inP"><option value="bid">Bid (what a sale fills at)</option><option value="mid">Mid (between bid and ask)</option></select></div>
+    </div>
+    <div class="row">
+      <span class="hint" id="assumeHint">After-tax yield applies these rates to each fund's distribution tax mix.</span>
+      <button class="btn primary" id="recalcAll" type="button">Recalculate all</button>
+    </div>
+  </section>
+
+  <div class="filters">
+    <input type="search" id="q" placeholder="Search ticker, fund, sponsor or manager" aria-label="Search ticker, fund, sponsor or manager">
+    <select id="fGrp" aria-label="Group"><option value="">All groups</option></select>
+    <select id="fType" aria-label="Category"><option value="">All categories</option></select>
+    <select id="fSt" aria-label="Structure"><option value="">Any structure</option></select>
+    <select id="fFreq" aria-label="Distribution frequency"><option value="">Any payout schedule</option><option>Weekly</option><option>Monthly</option><option>Quarterly</option><option>Semiannual</option><option>Annual</option></select>
+    <select id="fOpt" aria-label="Options frequency"><option value="">Any options</option><option value="Weekly">Weekly options</option><option value="Monthly">Monthly options</option><option value="Quarterly">Quarterly options</option><option value="None">No options</option></select>
+    <label class="chk"><input type="checkbox" id="fDisc"> Below NAV</label>
+    <label class="chk"><input type="checkbox" id="fMon"> Pays monthly or weekly</label>
+    <button class="btn" type="button" id="addFilter">+ Add filter</button>
+    <details class="colmenu" id="colMenu"><summary class="btn">More columns</summary><div class="colpanel" id="colPanel"></div></details>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="fbar" id="fbar" hidden></div>
+
+  <section class="sheet" aria-label="Screener">
+    <div class="scroll">
+      <table id="tbl">
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"><tr><td colspan="16" class="empty">Loading the fund ledger. Funds appear here as soon as the data store answers.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="note">Yields, NAVs and returns come from Yahoo Finance as of the last sync; closed-end fund expense ratios and leverage come from sponsor data on CEF Connect. Category, style box, managers and tax mix are curated and can lag fund changes. After-tax yield is an estimate from the tax mix shown on each fund's Income tab; return of capital is treated as deferred, not tax-free. A starting point for research, not a recommendation.</p>
+</div>
+
+<div class="overlay" id="overlay" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-modal="true" role="dialog" aria-labelledby="dTitle"></aside>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ------------------------------------------------------------ state */
+let FUNDS = [], BY = new Map(), META = null;
+let APPLIED = null;
+let OVR = {};               // per-fund tax mix overrides {ticker:{tx:{ord,qual,...}}} as fractions
+const RES = new Map();
+let QUEUE = new Map(), WL = new Map(), ANALYSES = new Map();
+let sortKey = "yld", sortDir = -1;
+let db = null, sample = null, canWrite = true;
+let openTicker = null, detailTab = "overview";
+
+/* ------------------------------------------------------------ format */
+const money = v => v == null || !isFinite(v) ? "–" : "$" + (Math.abs(v) >= 1000 ? v.toLocaleString(undefined,{maximumFractionDigits:0}) : v.toFixed(2));
+const money4 = v => v == null || !isFinite(v) ? "–" : "$" + (Math.abs(v) < 1 ? v.toFixed(4) : v.toFixed(2));
+const pct = (v, d=1) => v == null || !isFinite(v) ? "–" : (v*100).toFixed(d) + "%";
+const spct = (v, d=1) => v == null || !isFinite(v) ? "–" : (v>=0?"+":"") + (v*100).toFixed(d) + "%";
+const num = (v, d=2) => v == null || !isFinite(v) ? "–" : v.toFixed(d);
+const big = v => { if (v == null || !isFinite(v)) return "–"; const a=Math.abs(v);
+  return (v<0?"-":"") + "$" + (a>=1e12?(a/1e12).toFixed(2)+"T":a>=1e9?(a/1e9).toFixed(1)+"B":a>=1e6?(a/1e6).toFixed(0)+"M":a.toFixed(0)); };
+const na = `<span class="na">–</span>`;
+const toast = msg => { const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2600); };
+const sgn = (v, d=1, f=spct) => v == null || !isFinite(v) ? na : `<span class="${v>=0?"up":"down"}">${f(v,d)}</span>`;
+
+/* ------------------------------------------------------------ tax */
+const BUCKETS = [
+  ["ord","Ordinary income","Interest, nonqualified dividends and short-term gains, taxed at the ordinary rate"],
+  ["qual","Qualified dividends","Taxed at the qualified / long-term rate"],
+  ["ltcg","Long-term capital gains","Capital gain distributions, taxed at the long-term rate"],
+  ["s1256","Section 1256 gains","Index option gains, taxed 60% long-term and 40% short-term"],
+  ["reit","REIT (199A) dividends","Ordinary REIT dividends; the Section 199A deduction taxes 80% of them"],
+  ["roc","Return of capital","Not taxed when paid; lowers cost basis, so it is taxed later on sale"],
+];
+function mixOf(s){ const m = OVR[s.t]?.tx || s.tx || {ord:1}; const tot = BUCKETS.reduce((a,[k])=>a+(+m[k]||0),0) || 1;
+  const o = {}; for (const [k] of BUCKETS) o[k] = (+m[k]||0)/tot; return o; }
+function rates(A){
+  const n = A.niit === "yes" ? 3.8 : 0;
+  return {ord:(A.fo+A.st+n)/100, qual:(A.fc+A.st+n)/100, ltcg:(A.fc+A.st+n)/100,
+    s1256:(0.6*A.fc+0.4*A.fo+A.st+n)/100, reit:(0.8*A.fo+A.st+n)/100, roc:0};
+}
+
+/* ------------------------------------------------------------ covered calls */
+function normCdf(x){ // Abramowitz-Stegun 7.1.26
+  const t = 1/(1+0.3275911*Math.abs(x)/Math.SQRT2);
+  const y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-x*x/2);
+  return x >= 0 ? (1+y)/2 : (1-y)/2;
+}
+const PERIODS = {Weekly:52, Monthly:12, Quarterly:4};
+function ccCalc(s, A){
+  const o = s.o?.cc;
+  if (!o || !s.p) return {value:null, why: s.o?.f && s.o.f!=="None" ? "No option chain captured for this fund yet." : "No listed options."};
+  const T = Math.max(o.d, 1)/365, r = 0.04, q = s.ttm > 0 ? Math.min(s.ttm/s.p, 0.5) : 0;
+  const rows = [];
+  for (const [k, b, a, iv, oi] of o.ch){
+    const prem = A.cp === "mid" ? (b > 0 && a > 0 ? (b+a)/2 : b) : b;
+    let delta = null;
+    if (iv > 0.01 && iv < 4){
+      const d1 = (Math.log(s.p/k) + (r - q + iv*iv/2)*T)/(iv*Math.sqrt(T));
+      delta = Math.exp(-q*T)*normCdf(d1);
+    }
+    rows.push({k, b, a, iv, oi, prem, delta});
+  }
+  const usable = rows.filter(x => x.delta != null && x.prem > 0);
+  if (!usable.length) return {value:null, why:"No call in the chain had both a quote and a usable implied volatility.", rows, exp:o.e, dte:o.d, cycle:o.f};
+  const pick = usable.reduce((best, x) => Math.abs(x.delta - A.cd) < Math.abs(best.delta - A.cd) ? x : best);
+  const n = PERIODS[o.f] || Math.round(365/Math.max(o.d,1));
+  const income = pick.prem*100*n, mv = s.p*100;
+  return {value: income/mv, pick, rows, n, income, mv, exp:o.e, dte:o.d, cycle:o.f, rf:r, target:A.cd, ifCalled:(pick.k - s.p)/s.p};
+}
+
+/* ------------------------------------------------------------ per-fund math */
+function calc(s, A){
+  const fy = s.fwd && s.p ? s.fwd/s.p : null, ty = s.ttm && s.p ? s.ttm/s.p : null;
+  const y = A.yb === "ttm" ? ty : (fy ?? ty);
+  const mix = mixOf(s), R = rates(A);
+  const keep = BUCKETS.reduce((a,[k]) => a + mix[k]*(1-R[k]), 0);
+  const aty = y != null ? y*keep : null;
+  const sh = s.p ? A.amt/s.p : null;
+  return {at:A, y, fy, ty, mix, R, keep, aty, sh, income: y!=null ? A.amt*y : null, afterIncome: aty!=null ? A.amt*aty : null,
+    perPay: sh && (s.reg||s.last) ? sh*(s.reg||s.last) : null, dg: s.pttm ? s.ttm/s.pttm - 1 : null, cc: ccCalc(s, A)};
+}
+
+/* ------------------------------------------------------------ columns */
+const pf = (s,k) => s.pf?.[k];
+const rpct = (v,d=1) => v==null||!isFinite(v) ? na : pct(v,d);
+const freqPill = f => !f ? `<span class="pill">None</span>` : `<span class="pill ${({Weekly:"w",Monthly:"m",Quarterly:"q"})[f]||""}">${esc(f)}</span>`;
+const optPill = f => (!f || f==="None") ? `<span class="pill">None</span>` : `<span class="pill ${({Weekly:"w",Monthly:"m",Quarterly:"q"})[f]||""}">${esc(f)}</span>`;
+const stPill = st => `<span class="pill ${({ETF:"q",CEF:"m",BDC:"w"})[st]||""}">${esc(st)}</span>`;
+const premCell = v => v==null||!isFinite(v) ? na : `<span class="${v<0?"up":v>0.02?"down":""}" title="${v<0?"Trading below NAV":"Trading above NAV"}">${spct(v,1)}</span>`;
+
+const MORE_COLS = [
+  {k:"nav",  h:"NAV",          tip:"Net asset value per share (BDCs: latest reported book value)", on:false, v:s=>s.nav, f:s=>s.nav?money(s.nav):na},
+  {k:"tr5",  h:"5y TR / yr",   tip:"5-year total return with distributions reinvested, annualized", on:true, v:s=>pf(s,"tr5y"), f:s=>sgn(pf(s,"tr5y"))},
+  {k:"trytd",h:"YTD TR",       tip:"Total return this calendar year", on:false, v:s=>pf(s,"trYtd"), f:s=>sgn(pf(s,"trYtd"))},
+  {k:"pr3",  h:"3y price / yr",tip:"3-year share price change, annualized, without distributions. Persistently negative means payouts are eating into principal.", on:true, v:s=>pf(s,"pr3y"), f:s=>sgn(pf(s,"pr3y"))},
+  {k:"pr1",  h:"1y price",     tip:"1-year share price change without distributions", on:false, v:s=>pf(s,"pr1y"), f:s=>sgn(pf(s,"pr1y"))},
+  {k:"vol",  h:"Volatility",   tip:"Annualized standard deviation of daily total returns over the past year", on:false, v:s=>pf(s,"vol"), f:s=>rpct(pf(s,"vol"))},
+  {k:"mdd",  h:"Max drawdown", tip:"Largest peak-to-trough total-return decline over 3 years", on:true, v:s=>pf(s,"mdd3y"), f:s=>pf(s,"mdd3y")!=null?`<span class="down">${pct(pf(s,"mdd3y"),0)}</span>`:na},
+  {k:"beta", h:"Beta",         tip:"Volatility relative to the market", on:false, v:s=>s.beta, f:s=>s.beta!=null?num(s.beta,2):na},
+  {k:"dg",   h:"Dist. growth", tip:"Distributions paid in the last 12 months versus the 12 months before", on:true, v:(s,R)=>R?.dg, f:(s,R)=>sgn(R?.dg,0)},
+  {k:"cuts", h:"Cuts (3y)",    tip:"Times the regular payment fell more than 5% and stayed down, over 3 years", on:false, v:s=>s.cuts, f:s=>s.cuts==null?na:s.cuts>0?`<span class="pill b">${s.cuts}</span>`:`<span class="pill g">0</span>`},
+  {k:"dav",  h:"Disc. 1y avg", tip:"Average premium (+) or discount (−) to NAV over the past year (closed-end funds)", on:false, v:s=>s.disc?.avg1y, f:s=>premCell(s.disc?.avg1y)},
+  {k:"dz",   h:"Disc. z-score",tip:"Today's discount versus its 1-year average, in standard deviations. Below −2 is unusually cheap versus its own history.", on:false, v:s=>s.disc?.z, f:s=>s.disc?.z!=null?`<span class="${s.disc.z<=-2?"up":s.disc.z>=2?"down":""}">${num(s.disc.z,1)}</span>`:na},
+  {k:"lev",  h:"Leverage",     tip:"Effective leverage as a share of total assets (closed-end funds)", on:false, v:s=>s.levPct, f:s=>s.levPct!=null?pct(s.levPct,0):na},
+  {k:"aty",  h:"After-tax",    tip:"Yield after the tax rates above, using this fund's distribution tax mix", on:true, v:(s,R)=>R?.aty, f:(s,R)=>rpct(R?.aty,1)},
+  {k:"inc",  h:"Income / yr",  tip:"Annual distributions on the investment amount above, before tax", on:false, v:(s,R)=>R?.income, f:(s,R)=>R?.income!=null?money(R.income):na},
+  {k:"off",  h:"Off 52w high", tip:"Price relative to the 52-week high", on:false, v:s=>s.h52&&s.p?s.p/s.h52-1:null, f:s=>s.h52&&s.p?sgn(s.p/s.h52-1,0):na},
+  {k:"avol", h:"Avg volume",   tip:"Average daily shares traded, 3 months", on:false, v:s=>s.av, f:s=>s.av?Math.round(s.av).toLocaleString():na},
+  {k:"to",   h:"Turnover",     tip:"Annual holdings turnover from the latest report (ETFs)", on:false, v:s=>s.hold?.turnover, f:s=>s.hold?.turnover!=null?pct(s.hold.turnover,0):na},
+  {k:"hpe",  h:"Holdings P/E", tip:"Weighted price / earnings of the fund's stock holdings (ETFs)", on:false, v:s=>s.hold?.eq?.pe, f:s=>s.hold?.eq?.pe?num(s.hold.eq.pe,1):na},
+  {k:"cc",   h:"CC est. return", tip:"Estimated annual covered call income on the fund itself: premium × 100 shares × cycles per year ÷ value of 100 shares", on:false, v:(s,R)=>R?.cc?.value, f:(s,R)=>R?.cc?.value!=null?`<span title="${esc(R.cc.cycle)} call, ${num(R.cc.pick.delta,2)} delta, $${num(R.cc.pick.k,2)} strike">${pct(R.cc.value,1)}</span>`:na},
+].map(c => ({...c, opt:true}));
+let VIS = new Set(MORE_COLS.filter(c=>c.on).map(c=>c.k));
+try{ const v = JSON.parse(localStorage.getItem("fls-cols")||"null"); if (Array.isArray(v)) VIS = new Set(v); }catch(e){}
+
+const COLS = [
+  {k:"t", h:"Fund", l:true, v:s=>s.t, f:s=>`<span class="tk">${esc(s.t)}</span> ${stPill(s.st)}<span class="nm" title="${esc(s.n)}">${esc(s.n)}</span>`},
+  {k:"ty", h:"Category", l:true, v:s=>s.ty, f:s=>`<span class="nm" style="max-width:210px;color:var(--ink)" title="${esc(s.ty)}">${esc(s.ty)}</span><span class="nm" style="max-width:210px">${esc(s.grp||"")}</span>`},
+  {k:"sty", h:"Style box", l:true, v:s=>s.sty||"", f:s=>s.sty?`<span class="nm" style="max-width:170px;color:var(--ink)" title="${esc(s.sty)}">${esc(s.sty)}</span>`:na},
+  {k:"p", h:"Price", v:s=>s.p, f:s=>money(s.p)},
+  {k:"yld", h:"Fwd yield", tip:"Latest regular distribution × payments per year ÷ price", v:(s,R)=>R?.fy, f:(s,R)=>R?.fy!=null?`<b>${pct(R.fy,1)}</b>`:na},
+  {k:"ttm", h:"TTM yield", tip:"Distributions with ex-dates in the last 12 months ÷ price", v:(s,R)=>R?.ty, f:(s,R)=>rpct(R?.ty,1)},
+  ...MORE_COLS.filter(c=>c.k==="aty"),
+  {k:"freq", h:"Pays", tip:"Distribution frequency, from the spacing of recent ex-dates", v:s=>s.per||0, f:s=>freqPill(s.f)},
+  {k:"er", h:"Expense", tip:"Expense ratio. Closed-end funds: total including interest on leverage. BDCs and baby bonds: not applicable.", v:s=>s.er, f:s=>s.er!=null?`<span title="${esc(s.erSrc||"")}">${pct(s.er,2)}</span>`:na},
+  {k:"prem", h:"Prem / disc", tip:"Price versus NAV. Negative = trading at a discount.", v:s=>s.prem, f:s=>premCell(s.prem)},
+  {k:"aum", h:"Assets", tip:"Fund net assets (ETFs) or market value of shares (CEFs, BDCs)", v:s=>s.aum, f:s=>big(s.aum)},
+  {k:"tr1", h:"1y TR", tip:"1-year total return with distributions reinvested", v:s=>pf(s,"tr1y"), f:s=>sgn(pf(s,"tr1y"))},
+  {k:"tr3", h:"3y TR / yr", tip:"3-year total return, annualized", v:s=>pf(s,"tr3y"), f:s=>sgn(pf(s,"tr3y"))},
+  ...MORE_COLS.filter(c=>c.k!=="aty"),
+  {k:"opt", h:"Options", v:s=>({Weekly:3,Monthly:2,Quarterly:1}[s.o?.f]||0), f:s=>optPill(s.o?.f)},
+  {k:"act", h:"", nosort:true, f:s=>`<button class="btn small" type="button" data-recalc="${esc(s.t)}" title="Recalculate ${esc(s.t)} with the current assumptions">Recalc</button>`},
+];
+const visCols = () => COLS.filter(c => !c.opt || VIS.has(c.k));
+
+function renderHead(){
+  $("#thead").innerHTML = visCols().map(c => `<th class="${c.l?"l":""}" data-k="${c.k}" ${c.k===sortKey?`aria-sort="${sortDir>0?"ascending":"descending"}"`:""} scope="col"${c.tip?` title="${esc(c.tip)}"`:""}>${esc(c.h)}${c.k===sortKey?` <span class="ar">${sortDir>0?"▲":"▼"}</span>`:""}</th>`).join("");
+}
+function hay(s){ return [s.t, s.n, s.sp, s.mgr, s.ty, s.cat].join(" ").toLowerCase(); }
+function filtered(){
+  const q = $("#q").value.trim().toLowerCase(), g = $("#fGrp").value, ty = $("#fType").value, st = $("#fSt").value, fq = $("#fFreq").value, of = $("#fOpt").value;
+  const disc = $("#fDisc").checked, mon = $("#fMon").checked;
+  return FUNDS.filter(s => {
+    if (WL.get(s.t)?.status === "removed") return false;
+    if (q && !hay(s).includes(q)) return false;
+    if (g && s.grp !== g) return false;
+    if (ty && s.ty !== ty) return false;
+    if (st && s.st !== st) return false;
+    if (fq && s.f !== fq) return false;
+    if (of && (of === "None" ? (s.o?.f && s.o.f !== "None") : s.o?.f !== of)) return false;
+    if (disc && !(s.prem < 0)) return false;
+    if (mon && !(s.f === "Monthly" || s.f === "Weekly")) return false;
+    if (FILTERS.length && !passFilters(s, RES.get(s.t))) return false;
+    return true;
+  });
+}
+function renderTable(){
+  renderHead();
+  if (!FUNDS.length) return;
+  const col = visCols().find(c=>c.k===sortKey) || COLS.find(c=>c.k==="yld");
+  const rows = filtered().map(s => [s, RES.get(s.t)]);
+  rows.sort((a,b) => { const va = col.v(a[0],a[1]), vb = col.v(b[0],b[1]);
+    if (va==null && vb==null) return 0; if (va==null) return 1; if (vb==null) return -1;
+    return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * sortDir; });
+  const VC = visCols();
+  $("#tbody").innerHTML = rows.length ? rows.map(([s,R]) => `<tr data-t="${esc(s.t)}" tabindex="0">${VC.map(c=>`<td class="${c.l?"l":"num"}">${c.f(s,R)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${VC.length}" class="empty">No funds match these filters.</td></tr>`;
+  const live = FUNDS.filter(s => WL.get(s.t)?.status !== "removed").length;
+  $("#count").textContent = `${rows.length} of ${live} funds`;
+}
+$("#thead").addEventListener("click", e => { const th = e.target.closest("th"); if (!th) return; const c = COLS.find(x=>x.k===th.dataset.k); if (!c || c.nosort) return;
+  if (sortKey === c.k) sortDir *= -1; else { sortKey = c.k; sortDir = c.l ? 1 : -1; } renderTable(); });
+$("#tbody").addEventListener("click", e => {
+  const b = e.target.closest("[data-recalc]");
+  if (b){ e.stopPropagation(); recalcOne(b.dataset.recalc); return; }
+  const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t);
+});
+$("#tbody").addEventListener("keydown", e => { if (e.key==="Enter"){ const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t); } });
+["#q","#fType","#fSt","#fFreq","#fOpt","#fDisc","#fMon"].forEach(id => $(id).addEventListener("input", renderTable));
+$("#fGrp").addEventListener("input", () => { fillTypes(); renderTable(); });
+function fillSelect(sel, label, vals){
+  const cur = $(sel).value;
+  $(sel).innerHTML = `<option value="">${label}</option>` + vals.map(x=>`<option ${x===cur?"selected":""}>${esc(x)}</option>`).join("");
+  if (cur && !vals.includes(cur)) $(sel).value = "";
+}
+function fillTypes(){
+  const g = $("#fGrp").value;
+  fillSelect("#fType", "All categories", [...new Set(FUNDS.filter(s=>!g || s.grp===g).map(s=>s.ty).filter(Boolean))].sort());
+}
+
+function renderColMenu(){
+  $("#colPanel").innerHTML = MORE_COLS.map(c => `<label class="chk"><input type="checkbox" data-col="${c.k}" ${VIS.has(c.k)?"checked":""}> <span><b>${esc(c.h)}</b> <span class="note">${esc(c.tip)}</span></span></label>`).join("")
+    + `<div style="display:flex;gap:6px;margin-top:6px"><button class="btn small" type="button" data-cols="all">Show all</button><button class="btn small" type="button" data-cols="none">Hide all</button><button class="btn small" type="button" data-cols="default">Default</button></div>`;
+}
+$("#colPanel").addEventListener("change", e => { const cb = e.target.closest("[data-col]"); if (!cb) return;
+  cb.checked ? VIS.add(cb.dataset.col) : VIS.delete(cb.dataset.col); saveCols(); });
+$("#colPanel").addEventListener("click", e => { const b = e.target.closest("[data-cols]"); if (!b) return;
+  const m = b.dataset.cols; VIS = new Set(m==="all" ? MORE_COLS.map(c=>c.k) : m==="none" ? [] : MORE_COLS.filter(c=>c.on).map(c=>c.k));
+  renderColMenu(); saveCols(); });
+function saveCols(){ try{ localStorage.setItem("fls-cols", JSON.stringify([...VIS])); }catch(e){} renderTable(); }
+renderColMenu();
+
+/* ------------------------------------------------------------ numeric filters */
+const UNITS = {p:"money", yld:"pct", ttm:"pct", aty:"pct", er:"pct", prem:"pct", aum:"bn", tr1:"pct", tr3:"pct", nav:"money", tr5:"pct", trytd:"pct",
+  pr3:"pct", pr1:"pct", vol:"pct", mdd:"pct", beta:"num", dg:"pct", cuts:"num", dav:"pct", dz:"num", lev:"pct", inc:"money", off:"pct", avol:"num", to:"pct", hpe:"num", cc:"pct"};
+const FIELDS = COLS.filter(c => UNITS[c.k]).map(c => ({k:c.k, h:c.h, u:UNITS[c.k], v:c.v}));
+const FIELD = new Map(FIELDS.map(f => [f.k, f]));
+const UNIT_LABEL = {money:"$", pct:"%", num:"", bn:"$B"};
+const toRaw = (u, x) => u === "pct" ? x/100 : u === "bn" ? x*1e9 : x;
+let FILTERS = [];
+try{ const v = JSON.parse(localStorage.getItem("fls-filters")||"null"); if (Array.isArray(v)) FILTERS = v.filter(f => FIELD.has(f.k)); }catch(e){}
+function passFilters(s, R){
+  for (const f of FILTERS){
+    const fd = FIELD.get(f.k); if (!fd) continue;
+    const a = parseFloat(f.a), b = parseFloat(f.b), hasA = isFinite(a), hasB = isFinite(b);
+    if (!hasA && !(f.op === "between" && hasB)) continue;
+    const v = fd.v(s, R);
+    if (v == null || !isFinite(v)) return false;
+    const A = toRaw(fd.u, a), B = toRaw(fd.u, b);
+    if (f.op === "above" && !(v > A)) return false;
+    if (f.op === "below" && !(v < A)) return false;
+    if (f.op === "between"){
+      const lo = hasA && hasB ? Math.min(A,B) : hasA ? A : -Infinity, hi = hasA && hasB ? Math.max(A,B) : hasB ? B : Infinity;
+      if (!(v >= lo && v <= hi)) return false;
+    }
+  }
+  return true;
+}
+function renderFilters(){
+  const el = $("#fbar");
+  if (!FILTERS.length){ el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  const opts = sel => FIELDS.map(f => `<option value="${f.k}" ${f.k===sel?"selected":""}>${esc(f.h)}</option>`).join("");
+  el.innerHTML = FILTERS.map((f, i) => { const u = UNIT_LABEL[FIELD.get(f.k)?.u] || "";
+    return `<div class="frow" data-i="${i}">
+      <select data-f="k" aria-label="Column">${opts(f.k)}</select>
+      <select data-f="op" aria-label="Condition"><option value="above" ${f.op==="above"?"selected":""}>above</option><option value="below" ${f.op==="below"?"selected":""}>below</option><option value="between" ${f.op==="between"?"selected":""}>between</option></select>
+      <input data-f="a" type="number" step="any" inputmode="decimal" value="${esc(f.a??"")}" aria-label="${f.op==="between"?"From":"Value"}" placeholder="${f.op==="between"?"from":"value"}">
+      ${f.op==="between"?`<span class="and">and</span><input data-f="b" type="number" step="any" inputmode="decimal" value="${esc(f.b??"")}" aria-label="To" placeholder="to">`:""}
+      <span class="u">${esc(u)}</span>
+      <button class="x" type="button" data-rm="${i}" aria-label="Remove filter">Remove</button>
+    </div>`; }).join("")
+    + `<div class="foot"><span class="note">Percent fields take percents (enter 8 for 8%, −5 for a 5% discount). Assets are in billions. All filters must match; funds missing a value are left out.</span><button class="btn small" type="button" id="clearFilters">Clear all filters</button></div>`;
+}
+let fT = null;
+function filtersChanged(redraw){
+  try{ localStorage.setItem("fls-filters", JSON.stringify(FILTERS)); }catch(e){}
+  if (redraw) renderFilters();
+  clearTimeout(fT); fT = setTimeout(renderTable, 120);
+}
+$("#addFilter").addEventListener("click", () => {
+  FILTERS.push({k:"yld", op:"above", a:"", b:""}); filtersChanged(true);
+  const rows = $("#fbar").querySelectorAll(".frow"); rows[rows.length-1]?.querySelector("[data-f=k]")?.focus();
+});
+$("#fbar").addEventListener("input", e => {
+  const row = e.target.closest(".frow"); if (!row) return;
+  const f = FILTERS[+row.dataset.i], key = e.target.dataset.f; if (!f || !key) return;
+  f[key] = e.target.value; filtersChanged(key === "k" || key === "op");
+});
+$("#fbar").addEventListener("click", e => {
+  const rm = e.target.closest("[data-rm]");
+  if (rm){ FILTERS.splice(+rm.dataset.rm, 1); filtersChanged(true); return; }
+  if (e.target.closest("#clearFilters")){ FILTERS = []; filtersChanged(true); }
+});
+renderFilters();
+
+/* ------------------------------------------------------------ recalculation */
+const INPUTS = ["#inFo","#inFc","#inSt","#inNiit","#inYb","#inAmt","#inD","#inP"];
+function readInputs(){
+  const f = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
+  return {fo:f("#inFo",24), fc:f("#inFc",15), st:f("#inSt",0), niit:$("#inNiit").value, yb:$("#inYb").value, amt:Math.max(f("#inAmt",10000),1), cd:f("#inD",0.3), cp:$("#inP").value};
+}
+const sameA = (a,b) => a && b && ["fo","fc","st","niit","yb","amt","cd","cp"].every(k => a[k]===b[k]);
+function updateHint(){
+  const c = readInputs(), n = c.niit==="yes" ? " plus 3.8% NIIT" : "";
+  $("#assumeHint").innerHTML = sameA(c, APPLIED)
+    ? `After-tax yield uses ${c.fo}% ordinary, ${c.fc}% qualified and long-term, ${c.st}% state${n}. Section 1256 gains blend 60/40; return of capital is deferred.`
+    : `<span class="stale">Assumptions changed.</span> Press Recalculate all, or Recalc on a single fund.`;
+}
+function recalcAll(silent){
+  APPLIED = readInputs();
+  for (const s of FUNDS) RES.set(s.t, calc(s, APPLIED));
+  renderTable(); updateHint(); saveSettings();
+  if (openTicker) renderDetail(openTicker);
+  if (!silent) toast(`Recalculated ${FUNDS.length} funds`);
+}
+function recalcOne(t){
+  const s = BY.get(t); if (!s) return;
+  RES.set(t, calc(s, readInputs())); renderTable();
+  if (openTicker === t) renderDetail(t);
+  toast(`Recalculated ${t}`);
+}
+$("#recalcAll").addEventListener("click", () => recalcAll(false));
+INPUTS.forEach(id => $(id).addEventListener("input", updateHint));
+
+/* ------------------------------------------------------------ charts */
+function barChart(pts, label, fmt, opts={}){
+  // pts: [{x:label, v}]
+  if (pts.length < 2) return `<div class="chart${opts.wide?" wide":""}"><h3>${esc(label)}</h3><p class="note">Not enough history.</p></div>`;
+  const W = opts.wide ? 620 : 280, Hh=130, L=8, R=8, T=16, B=22;
+  const vs = pts.map(p=>p.v), mn = Math.min(0,...vs), mx = Math.max(...vs, 0) || 1;
+  const sx = i => L + (i+0.5)*(W-L-R)/pts.length, sy = v => T + (mx - v)*(Hh-T-B)/(mx-mn || 1);
+  const bw = Math.max(2, (W-L-R)/pts.length*0.7);
+  const bars = pts.map((p,i)=>`<rect x="${(sx(i)-bw/2).toFixed(1)}" y="${Math.min(sy(p.v),sy(0)).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(Math.abs(sy(p.v)-sy(0)),0.5).toFixed(1)}" fill="${p.v<0?"var(--bad)":i===pts.length-1?"var(--accent)":p.hi?"var(--brass)":"var(--rule)"}" rx="1"><title>${esc(p.x)}: ${fmt(p.v)}</title></rect>`).join("");
+  const last = pts[pts.length-1];
+  return `<div class="chart${opts.wide?" wide":""}"><h3>${esc(label)}</h3><svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="${esc(label)}">
+    <line x1="${L}" x2="${W-R}" y1="${sy(0)}" y2="${sy(0)}" stroke="var(--muted)" stroke-width=".6"/>${bars}
+    <text x="${L}" y="${Hh-6}" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${esc(pts[0].x)}</text>
+    <text x="${W-R}" y="${Hh-6}" font-size="10" fill="var(--muted)" text-anchor="end" font-family="IBM Plex Mono, monospace">${esc(last.x)}</text>
+    <text x="${W-R}" y="11" font-size="10.5" fill="var(--ink)" text-anchor="end" font-family="IBM Plex Mono, monospace">${esc(fmt(last.v))}</text>
+  </svg>${opts.note?`<p class="note">${opts.note}</p>`:""}</div>`;
+}
+function lineChart(xs, series, label, fmt, opts={}){
+  // series: [{name, color, vals:[number|null]}]
+  const all = series.flatMap(s=>s.vals).filter(v=>v!=null && isFinite(v));
+  if (xs.length < 3 || !all.length) return `<div class="chart${opts.wide?" wide":""}"><h3>${esc(label)}</h3><p class="note">Not enough history.</p></div>`;
+  const W = opts.wide ? 620 : 300, Hh = 160, L = 44, R = 10, T = 12, B = 22;
+  let mn = Math.min(...all), mx = Math.max(...all); if (opts.zero){ mn = Math.min(mn,0); mx = Math.max(mx,0); }
+  const pad = (mx-mn)*0.08 || Math.abs(mx)*0.1 || 1; mn -= pad; mx += pad;
+  const sx = i => L + i*(W-L-R)/(xs.length-1), sy = v => T + (mx - v)*(Hh-T-B)/(mx-mn);
+  const ticks = [mn+pad, (mn+mx)/2, mx-pad];
+  const grid = ticks.map(v=>`<line x1="${L}" x2="${W-R}" y1="${sy(v).toFixed(1)}" y2="${sy(v).toFixed(1)}" stroke="var(--rule-2)" stroke-width="1"/><text x="${L-5}" y="${(sy(v)+3).toFixed(1)}" font-size="9.5" fill="var(--muted)" text-anchor="end" font-family="IBM Plex Mono, monospace">${esc(fmt(v))}</text>`).join("");
+  const zero = opts.zero && mn < 0 && mx > 0 ? `<line x1="${L}" x2="${W-R}" y1="${sy(0)}" y2="${sy(0)}" stroke="var(--muted)" stroke-width=".7"/>` : "";
+  const paths = series.map(s => { let d = "", pen = false;
+    s.vals.forEach((v,i) => { if (v==null || !isFinite(v)){ pen = false; return; } d += `${pen?"L":"M"}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`; pen = true; });
+    const li = s.vals.map((v,i)=>[v,i]).filter(([v])=>v!=null&&isFinite(v)).pop();
+    return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.8" stroke-linejoin="round"/>${li?`<circle cx="${sx(li[1]).toFixed(1)}" cy="${sy(li[0]).toFixed(1)}" r="3" fill="${s.color}"/>`:""}`; }).join("");
+  return `<div class="chart${opts.wide?" wide":""}"><h3>${esc(label)}</h3>
+    ${series.length>1?`<div class="legend">${series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`:""}
+    <svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="${esc(label)}">${grid}${zero}${paths}
+    <text x="${L}" y="${Hh-6}" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${esc(xs[0])}</text>
+    <text x="${W-R}" y="${Hh-6}" font-size="10" fill="var(--muted)" text-anchor="end" font-family="IBM Plex Mono, monospace">${esc(xs[xs.length-1])}</text></svg>
+    ${opts.note?`<p class="note">${opts.note}</p>`:""}</div>`;
+}
+
+/* ------------------------------------------------------------ style box */
+function styleBox(sty){
+  if (!sty) return `<p class="note">No style assigned.</p>`;
+  const s = sty.toLowerCase();
+  let rows, cols, r = -1, c = -1, cap;
+  if (/quality|duration|floating/.test(s)){
+    rows = ["High","Medium","Low"]; cols = ["Short","Medium","Long"]; cap = "Credit quality × interest-rate sensitivity";
+    r = /high quality/.test(s) ? 0 : /medium quality/.test(s) ? 1 : /low quality/.test(s) ? 2 : -1;
+    c = /short|floating/.test(s) ? 0 : /medium duration/.test(s) ? 1 : /long/.test(s) ? 2 : -1;
+  } else if (/(large|mid|small)/.test(s) && /(value|blend|growth)/.test(s)){
+    rows = ["Large","Mid","Small"]; cols = ["Value","Blend","Growth"]; cap = "Equity size × style";
+    r = /large/.test(s) ? 0 : /mid/.test(s) ? 1 : 2; c = /value/.test(s) ? 0 : /blend/.test(s) ? 1 : 2;
+  } else return `<div class="stywrap"><span class="pill q" style="font-size:.8rem">${esc(sty)}</span><span class="note">No 3×3 box applies to this kind of holding.</span></div>`;
+  let g = `<span></span>${cols.map(x=>`<span>${x}</span>`).join("")}`;
+  rows.forEach((rl, i) => { g += `<span class="rl">${rl}</span>` + cols.map((_, j) => `<span class="c${i===r&&j===c?" on":""}"></span>`).join(""); });
+  return `<div class="stywrap"><div class="sbox" role="img" aria-label="${esc(sty)}">${g}</div><div style="display:grid;gap:4px"><b>${esc(sty)}</b><span class="note">${cap}. Assigned from holdings; not a Morningstar rating.</span></div></div>`;
+}
+
+/* ------------------------------------------------------------ detail */
+function openDetail(t){
+  openTicker = t; $("#overlay").hidden = false; $("#drawer").hidden = false; document.body.style.overflow = "hidden";
+  renderDetail(t); $("#drawer").querySelector(".dclose")?.focus();
+}
+function closeDetail(){ openTicker = null; $("#overlay").hidden = true; $("#drawer").hidden = true; document.body.style.overflow = ""; }
+$("#overlay").addEventListener("click", closeDetail);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && openTicker) closeDetail(); });
+
+function renderDetail(t){
+  const s = BY.get(t); if (!s) return;
+  const R = RES.get(t) || calc(s, readInputs());
+  const q = QUEUE.get(t);
+  const tabs = [["overview","Overview"],["income","Income & tax"],["perf","Performance"],["hold","Holdings"],["options","Options"],["mgr","Managers & strategy"],["analysis","In-depth analysis"]];
+  $("#drawer").innerHTML = `
+  <div class="dhead">
+    <div class="r1">
+      <div style="min-width:0;display:grid;gap:2px">
+        <h2 id="dTitle"><span class="mono">${esc(s.t)}</span> · ${esc(s.n)}</h2>
+        <div class="meta"><span>${esc(s.ty)}</span><span>${esc(s.st)}</span>${s.sp?`<span>${esc(s.sp)}</span>`:""}${s.sty?`<span>${esc(s.sty)}</span>`:""}</div>
+      </div>
+      <button class="btn small dclose" type="button" aria-label="Close">Close</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center">
+      <span class="px">${money(s.p)}</span>
+      ${R.fy!=null?`<span>Forward yield <b class="mono">${pct(R.fy,2)}</b></span>`:""}
+      ${s.prem!=null?`<span>${s.prem<0?"Discount":"Premium"} <b class="mono">${premCell(s.prem)}</b></span>`:""}
+      ${freqPill(s.f)}
+      <span class="note">Data ${esc((s.u||"").slice(0,10))}</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center">
+      <div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button class="tab" role="tab" type="button" data-tab="${k}" aria-selected="${detailTab===k}">${l}</button>`).join("")}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn small" type="button" id="dRecalc">Recalculate</button>
+        <button class="btn small" type="button" id="dRefresh" ${q?"disabled":""}>${q?"Refresh queued":"Refresh data"}</button>
+        <button class="btn small" type="button" id="dRemove">Remove from screener</button>
+      </div>
+    </div>
+  </div>
+  <div class="dbody">${detailBody(s, R)}</div>`;
+  const d = $("#drawer");
+  d.querySelector(".dclose").onclick = closeDetail;
+  d.querySelectorAll(".tab").forEach(b => b.onclick = () => { detailTab = b.dataset.tab; renderDetail(t); });
+  d.querySelector("#dRecalc").onclick = () => recalcOne(t);
+  d.querySelector("#dRefresh").onclick = () => queueRefresh([t]);
+  const rm = d.querySelector("#dRemove");
+  rm.onclick = () => {
+    if (rm.dataset.armed !== "1"){ rm.dataset.armed = "1"; rm.textContent = `Confirm: remove ${t}`; rm.classList.add("primary"); return; }
+    removeFund(t);
+  };
+  const ms = d.querySelector("#mixSave"); if (ms) ms.onclick = () => saveMix(t);
+  const mc = d.querySelector("#mixClear"); if (mc) mc.onclick = () => { delete OVR[t]; saveSettings(); recalcOne(t); };
+  const ga = d.querySelector("#genAnalysis"); if (ga) ga.onclick = () => runAnalysis(t);
+}
+
+function card(k, v, d, cls=""){ return `<div class="val ${cls}"><span class="k">${k}</span><span class="v">${v}</span><span class="d">${d||""}</span></div>`; }
+
+function detailBody(s, R){
+  const P = s.pf || {};
+  if (detailTab === "overview"){
+    return `
+    <div class="vals">
+      ${card("Forward yield", pct(R.fy,2), `<span class="note">${money4(s.reg||s.last)} × ${s.per||"–"} a year</span>`, "avg")}
+      ${card("Trailing 12-month yield", pct(R.ty,2), `<span class="note">${money4(s.ttm)} paid in the last year</span>`)}
+      ${card("After-tax yield", pct(R.aty,2), `<span class="note">Keeps ${pct(R.keep,0)} of each dollar at your rates</span>`)}
+      ${card("Expense ratio", s.er!=null?pct(s.er,2):"–", `<span class="note">${esc(s.er!=null?(s.erSrc||"")+(s.erAsOf?`, as of ${s.erAsOf}`:""):s.st==="BDC"?"Operating company; costs are inside net investment income":"Not reported")}</span>`)}
+      ${card(s.prem!=null&&s.prem<0?"Discount to NAV":"Premium to NAV", s.prem!=null?spct(s.prem,1):"–", s.nav?`<span class="note">NAV ${money(s.nav)}${s.disc?` · 1y avg ${spct(s.disc.avg1y,1)}`:""}</span>`:`<span class="note">${s.st==="Baby bond"?"Debt security; trades around $25 par":"No NAV reported"}</span>`)}
+      ${card("Total return, 1 year", P.tr1y!=null?spct(P.tr1y,1):"–", P.pr1y!=null?`<span class="note">Price alone ${spct(P.pr1y,1)}</span>`:"")}
+      ${card("Total return, 3 years", P.tr3y!=null?spct(P.tr3y,1)+"/yr":"–", P.pr3y!=null?`<span class="note">Price alone ${spct(P.pr3y,1)}/yr</span>`:"")}
+      ${card("Assets", big(s.aum), `<span class="note">${s.av?Math.round(s.av).toLocaleString()+" shares a day":""}</span>`)}
+    </div>
+    <section style="display:grid;gap:10px"><h3>Style box</h3>${styleBox(s.sty)}</section>
+    <section class="prose"><h3>Strategy</h3><p>${esc(s.strat || s.sum || "No strategy summary yet. It is added at the next sync.")}</p></section>
+    <div class="kv">
+      <div><span>Structure</span><span>${esc(s.st)}</span></div><div><span>Category</span><span>${esc(s.ty)}</span></div>
+      <div><span>Sponsor</span><span>${esc(s.sp||"–")}</span></div><div><span>Inception</span><span>${esc(s.inc||"–")}</span></div>
+      <div><span>Benchmark</span><span>${esc(s.bench||"–")}</span></div><div><span>Yahoo category</span><span>${esc(s.cat||"–")}</span></div>
+      <div><span>Leverage</span><span>${s.levPct!=null?pct(s.levPct,1):esc(s.lev||"–")}</span></div><div><span>Distribution policy</span><span>${esc(s.pol||"–")}</span></div>
+      <div><span>Options used</span><span>${esc(s.optx||"–")}</span></div><div><span>Payout cuts, 3 years</span><span>${s.cuts??"–"}</span></div>
+    </div>
+    ${s.lev && s.levPct!=null?`<p class="note">${esc(s.lev)}</p>`:""}
+    ${s.noProf?`<p class="note">This fund was added recently. Its category, style box and manager overview arrive with the next sync.</p>`:""}`;
+  }
+  if (detailTab === "income"){
+    const dh = (s.dh||[]).slice(-48);
+    const med = dh.length ? dh.map(x=>x[1]).sort((a,b)=>a-b)[Math.floor(dh.length/2)] : 0;
+    const pts = dh.map(([d,v]) => ({x:d.slice(0,7), v, hi: v > med*1.5}));
+    const yrs = Object.entries(s.dby||{}).sort((a,b)=>a[0]-b[0]).map(([y,v])=>({x:y, v}));
+    const mix = R.mix, Rt = R.R;
+    return `
+    <div class="vals">
+      ${card("Income on "+money(R.at.amt), R.income!=null?money(R.income)+"/yr":"–", `<span class="note">${num(R.sh,1)} shares at ${money(s.p)}</span>`, "avg")}
+      ${card("Per payment", R.perPay!=null?money(R.perPay):"–", `<span class="note">${esc(s.f||"–")} · last ex-date ${esc(s.lastEx||"–")}</span>`)}
+      ${card("After tax", R.afterIncome!=null?money(R.afterIncome)+"/yr":"–", `<span class="note">${pct(R.aty,2)} after-tax yield</span>`)}
+      ${card("Distribution growth", R.dg!=null?spct(R.dg,0):"–", `<span class="note">Last 12 months vs prior 12</span>`)}
+    </div>
+    <div class="charts">
+      ${barChart(pts, "Distributions per share, each payment", money4, {wide:true, note: pts.some(p=>p.hi)?"Gold bars are payments more than 1.5× the typical amount, usually specials or year-end gains.":""})}
+      ${barChart(yrs, "Distributions per share by calendar year", money)}
+    </div>
+    <section style="display:grid;gap:10px"><h3>Tax mix and after-tax yield</h3>
+      <p class="note">${esc(s.tax||"")} The mix below is a starting estimate${OVR[s.t]?.tx?" that you edited":""}; set it from the fund's latest 1099 or Section 19(a) notices. Shares must add to 100%.</p>
+      <div class="mix">${BUCKETS.map(([k,l,tip]) => `<div class="field"><label for="mx_${k}" title="${esc(tip)}">${esc(l)}</label><div class="pct"><input id="mx_${k}" type="number" step="5" min="0" max="100" value="${Math.round(mix[k]*100)}"></div></div>`).join("")}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small primary" type="button" id="mixSave">Save tax mix</button>${OVR[s.t]?.tx?`<button class="btn small" type="button" id="mixClear">Back to estimate</button>`:""}</div>
+      <div class="hist"><table><thead><tr><th class="l">Character</th><th>Share</th><th>Tax rate</th><th>Yield before tax</th><th>Kept</th></tr></thead><tbody>
+      ${BUCKETS.filter(([k])=>mix[k]>0).map(([k,l]) => `<tr><td class="l">${esc(l)}</td><td class="num">${pct(mix[k],0)}</td><td class="num">${pct(Rt[k],1)}</td><td class="num">${pct((R.y||0)*mix[k],2)}</td><td class="num">${pct((R.y||0)*mix[k]*(1-Rt[k]),2)}</td></tr>`).join("")}
+      <tr style="font-weight:600"><td class="l">Total</td><td class="num">100%</td><td class="num">${pct(1-R.keep,1)}</td><td class="num">${pct(R.y,2)}</td><td class="num">${pct(R.aty,2)}</td></tr></tbody></table></div>
+      ${mix.roc>0?`<p class="note">Return of capital is shown as untaxed today. It lowers your cost basis, so it comes back as capital gain when you sell (or is taxed once basis reaches zero). In a closed-end fund it can also mean the payout exceeds what the portfolio earns; compare the 3-year price trend on the Performance tab.</p>`:""}
+    </section>
+    <section style="display:grid;gap:8px"><h3>Recent distributions</h3>
+      <div class="hist"><table><thead><tr><th class="l">Ex-date</th><th>Amount</th><th>Yield at today's price, annualized</th></tr></thead><tbody>
+      ${dh.slice(-24).reverse().map(([d,v]) => `<tr><td class="l mono">${esc(d)}</td><td class="num">${money4(v)}</td><td class="num">${s.per&&s.p?pct(v*s.per/s.p,1):"–"}</td></tr>`).join("")}
+      </tbody></table></div></section>`;
+  }
+  if (detailTab === "perf"){
+    const M = s.m || [];
+    const xs = M.map(r=>r[0]);
+    const navBy = new Map((s.nm||[]).map(r=>[r[0], r[1]]));
+    const pr = M.map(r=>r[1]), nv = M.map(r=>navBy.get(r[0]) ?? null);
+    const hasNav = nv.some(v=>v!=null);
+    const base = M[0]; const idxTR = M.map(r=>r[2]/base?.[2]*10000), idxPR = M.map(r=>r[1]/base?.[1]*10000);
+    const disc = M.map((r,i)=> nv[i] ? r[1]/nv[i]-1 : null);
+    return `
+    <div class="charts">
+      ${lineChart(xs, [{name:"Total return (reinvested)", color:"var(--accent)", vals:idxTR},{name:"Price only", color:"var(--brass)", vals:idxPR}], `Growth of $10,000 since ${xs[0]||"–"}`, v=>"$"+Math.round(v/1000)+"k", {wide:true, note:"The gap between the lines is the cumulative value of the distributions. A falling price line with a rising total-return line means the fund is paying out principal along with income."})}
+      ${lineChart(xs, hasNav?[{name:"Share price", color:"var(--brass)", vals:pr},{name:"NAV", color:"var(--accent)", vals:nv}]:[{name:"Share price", color:"var(--accent)", vals:pr}], hasNav?"Price and NAV, month-end":"Share price, month-end", money)}
+      ${hasNav?lineChart(xs, [{name:"Premium / discount", color:"var(--accent)", vals:disc}], "Premium / discount to NAV", v=>pct(v,0), {zero:true}):""}
+    </div>
+    <div class="kv">
+      <div><span>Total return 1y</span><span>${spct(P.tr1y)}</span></div><div><span>Total return 3y / yr</span><span>${spct(P.tr3y)}</span></div>
+      <div><span>Total return 5y / yr</span><span>${spct(P.tr5y)}</span></div><div><span>Total return YTD</span><span>${spct(P.trYtd)}</span></div>
+      <div><span>Price change 1y</span><span>${spct(P.pr1y)}</span></div><div><span>Price change 3y / yr</span><span>${spct(P.pr3y)}</span></div>
+      <div><span>Volatility (1y)</span><span>${pct(P.vol)}</span></div><div><span>Max drawdown (3y)</span><span>${pct(P.mdd3y)}</span></div>
+      <div><span>Beta</span><span>${num(s.beta)}</span></div><div><span>52-week range</span><span>${money(s.l52)} to ${money(s.h52)}</span></div>
+      <div><span>50-day average</span><span>${money(s.ma50)}</span></div><div><span>200-day average</span><span>${money(s.ma200)}</span></div>
+      ${s.disc?`<div><span>Discount 1y range</span><span>${spct(s.disc.lo1y,1)} to ${spct(s.disc.hi1y,1)}</span></div><div><span>Discount z-score</span><span>${num(s.disc.z,1)}</span></div>`:""}
+    </div>
+    <p class="note">Total return reinvests distributions on the ex-date using Yahoo's adjusted closes. History starts ${esc(P.since||"–")}${s.inc&&P.since&&s.inc>P.since?"":""}; funds younger than 3 or 5 years show no figure for that period.</p>`;
+  }
+  if (detailTab === "hold"){
+    const h = s.hold;
+    if (!h) return `<p class="note">The price feed doesn't carry holdings for ${s.st==="ETF"?"this ETF yet":"closed-end funds, BDCs or baby bonds"}. ${s.web?`See the sponsor's site: <a href="${esc(s.web)}" target="_blank" rel="noopener">${esc(s.web.replace(/^https?:\/\//,""))}</a>.`:""}</p>`;
+    const SECT = {technology:"Technology",financial_services:"Financials",healthcare:"Healthcare",consumer_cyclical:"Consumer cyclical",communication_services:"Communication",industrials:"Industrials",consumer_defensive:"Consumer defensive",energy:"Energy",utilities:"Utilities",realestate:"Real estate",basic_materials:"Materials"};
+    const bars = (obj, lab) => Object.entries(obj||{}).filter(([,v])=>v>0.001).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar"><span>${esc(lab(k))}</span><span class="tr"><span class="fl" style="width:${Math.min(v*100,100).toFixed(1)}%;display:block"></span></span><span class="pv">${pct(v,1)}</span></div>`).join("");
+    return `
+    ${h.top?`<section style="display:grid;gap:8px"><h3>Top holdings</h3><div class="hist"><table><thead><tr><th class="l">Holding</th><th class="l">Name</th><th>Weight</th></tr></thead><tbody>
+      ${h.top.map(([sym,n,w])=>`<tr><td class="l mono">${esc(sym)}</td><td class="l">${esc(n)}</td><td class="num">${pct(w,1)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">Top ${h.top.length} make up ${pct(h.top.reduce((a,x)=>a+(x[2]||0),0),0)} of the fund.</p></section>`:""}
+    ${h.sectors?`<section style="display:grid;gap:8px"><h3>Sector weights</h3><div class="bars">${bars(h.sectors, k=>SECT[k]||k)}</div></section>`:""}
+    ${h.assets?`<section style="display:grid;gap:8px"><h3>Asset mix</h3><div class="bars">${bars(h.assets, k=>k.charAt(0).toUpperCase()+k.slice(1))}</div><p class="note">Option positions and cash collateral can push stock or cash weights above or below 100%.</p></section>`:""}
+    <div class="kv">
+      ${h.eq?.pe?`<div><span>Holdings P/E</span><span>${num(h.eq.pe,1)}</span></div>`:""}${h.eq?.pb?`<div><span>Holdings P/B</span><span>${num(h.eq.pb,1)}</span></div>`:""}
+      ${h.bond?.dur?`<div><span>Duration</span><span>${num(h.bond.dur,1)} yrs</span></div>`:""}${h.turnover!=null?`<div><span>Turnover</span><span>${pct(h.turnover,0)}</span></div>`:""}
+    </div>`;
+  }
+  if (detailTab === "options"){
+    const o = s.o || {}, c = o.cs;
+    if (!o.f || o.f === "None") return `<p class="note">No listed options found for ${esc(s.t)}.</p>`;
+    const ex = (o.x||[]).map(d=>`<span class="pill">${esc(d)}</span>`).join(" ");
+    return `<section style="display:grid;gap:10px">
+      <h3>Expiration frequency</h3>
+      <p>${optPill(o.f)} &nbsp;${o.f==="Weekly"?"Weekly expirations are listed, so you can write covered calls every week as well as on the monthly cycle.":o.f==="Monthly"?"Options expire on the standard monthly cycle.":"Only a few expirations are listed, mostly quarterly or longer-dated."}</p>
+      <h3>Next expirations</h3><div style="display:flex;flex-wrap:wrap;gap:6px">${ex}</div>
+      ${s.grp==="Option income"?`<p class="note">This fund already sells options inside its portfolio, so its own share price tends to move less and its calls usually carry less premium than the underlying index's.</p>`:""}
+    </section>
+    ${ccSection(s, R)}
+    ${c?`<section style="display:grid;gap:10px"><h3>At-the-money call, about 30 days out</h3>
+      <div class="kv"><div><span>Expiration</span><span>${esc(c.e)} (${c.d} days)</span></div><div><span>Strike</span><span>${money(c.k)}</span></div><div><span>Bid / ask</span><span>${money(c.b)} / ${money(c.a)}</span></div><div><span>Mid premium</span><span>${money(c.m)}</span></div><div><span>Implied volatility</span><span>${pct(c.iv)}</span></div><div><span>Open interest</span><span>${c.oi?.toLocaleString?.()??"–"}</span></div><div><span>Premium / price</span><span>${pct(c.py,2)}</span></div><div><span>Annualized</span><span>${pct(c.ann,1)}</span></div></div></section>`:""}`;
+  }
+  if (detailTab === "mgr"){
+    const links = [s.web?`<a href="${esc(s.web)}" target="_blank" rel="noopener">Sponsor site</a>`:"",
+      `<a href="https://finance.yahoo.com/quote/${esc(s.t)}" target="_blank" rel="noopener">Yahoo Finance</a>`,
+      s.st==="CEF"?`<a href="https://www.cefconnect.com/fund/${esc(s.t)}" target="_blank" rel="noopener">CEF Connect</a>`:"",
+      `<a href="https://www.sec.gov/cgi-bin/browse-edgar?company=&CIK=${esc(s.t)}&type=&action=getcompany" target="_blank" rel="noopener">SEC filings</a>`].filter(Boolean).join(" · ");
+    return `<section class="prose"><h3>Who runs it</h3><p>${esc(s.mgr||"Manager overview arrives with the next sync.")}</p></section>
+      <section class="prose"><h3>Investment strategy</h3><p>${esc(s.strat||"–")}</p></section>
+      <section class="prose"><h3>How distributions are taxed</h3><p>${esc(s.tax||"–")}</p></section>
+      ${s.sum?`<section class="prose"><h3>Fund description (Yahoo)</h3><p class="summary">${esc(s.sum)}</p></section>`:""}
+      <div class="kv"><div><span>Sponsor</span><span>${esc(s.sp||"–")}</span></div><div><span>Inception</span><span>${esc(s.inc||"–")}</span></div><div><span>Benchmark</span><span>${esc(s.bench||"–")}</span></div><div><span>Options used</span><span>${esc(s.optx||"–")}</span></div></div>
+      ${s.src?`<p class="note">Managers, expense ratio and leverage checked against ${esc(s.src)}.</p>`:""}
+      <p>${links}</p>`;
+  }
+  if (detailTab === "analysis"){
+    const a = ANALYSES.get(s.t);
+    return `<div class="analysis" id="anaBox">
+      ${a?renderMd(a.text):`<p>Generate a written analysis of ${esc(s.n)}: what it owns and how it produces income, the managers, how sustainable the distribution looks against total return and NAV, costs and leverage, tax treatment, the premium or discount, risks, and how it compares with similar funds.</p>`}
+      ${a?`<p class="note">Written ${esc((a.at||"").slice(0,10))} at a price of ${money(a.price)}. Built from this page's figures plus Claude's general knowledge, which may lag recent events.</p>`:""}
+      <div>${sample?`<button class="btn primary" type="button" id="genAnalysis">${a?"Rewrite analysis":"Generate analysis"}</button>`:`<p class="note">Analysis needs the page's Claude access, which isn't available in this view.</p>`}</div>
+    </div>`;
+  }
+  return "";
+}
+
+function ccSection(s, R){
+  const c = R.cc;
+  if (!c || c.value == null) return `<section style="display:grid;gap:8px"><h3>Covered call estimated return</h3><p class="note">${esc(c?.why || "Not available.")}</p></section>`;
+  const p = c.pick;
+  return `<section style="display:grid;gap:10px"><h3>Covered call estimated return</h3>
+    <div class="vals"><div class="val avg"><span class="k">Estimated annual return</span><span class="v">${pct(c.value,1)}</span><span class="d note">${money(c.income)} a year on ${money(c.mv)} of shares</span></div>
+      <div class="val"><span class="k">Call sold</span><span class="v">${money(p.k)}</span><span class="d note">${num(p.delta,2)} delta · expires ${esc(c.exp)} (${c.dte} days)</span></div></div>
+    <div class="formula">${esc(c.cycle)} cycle: ${c.n} sales a year, 100 shares
+Premium (${R.at.cp==="mid"?"mid":"bid"})  ${money(p.prem)} × 100 = ${money(p.prem*100)} per sale
+Annual income       ${money(p.prem*100)} × ${c.n} = ${money(c.income)}
+Market value        ${money(s.p)} × 100 = ${money(c.mv)}
+Estimated return    ${money(c.income)} ÷ ${money(c.mv)} = ${pct(c.value,1)}</div>
+    <p class="note">Chooses the call whose delta is closest to ${num(c.target,2)}, with delta from Black-Scholes using each strike's implied volatility, a 4% rate and the fund's trailing yield. Assumes the same premium each cycle and that shares are not called away; if they are, the gain up to the strike is ${pct(c.ifCalled,1)} on top of the premium. Option volume on smaller funds can be thin, so check the bid-ask spread.</p>
+    <div class="hist"><table><thead><tr><th class="l">Strike</th><th>Bid</th><th>Ask</th><th>Implied vol</th><th>Delta</th><th>Open interest</th></tr></thead><tbody>
+    ${c.rows.map(x=>`<tr${x===p?` style="background:var(--accent-soft);font-weight:600"`:""}><td class="l num">${money(x.k)}</td><td class="num">${money(x.b)}</td><td class="num">${money(x.a)}</td><td class="num">${pct(x.iv,0)}</td><td class="num">${num(x.delta,2)}</td><td class="num">${x.oi?.toLocaleString?.()??"–"}</td></tr>`).join("")}
+    </tbody></table></div></section>`;
+}
+
+function renderMd(t){
+  const lines = String(t).split(/\n/); let html = "", inList = false;
+  const inline = x => esc(x).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>");
+  for (const ln of lines){
+    const l = ln.trim();
+    if (/^[-*] /.test(l)){ if(!inList){html+="<ul>";inList=true;} html+=`<li>${inline(l.slice(2))}</li>`; continue; }
+    if (inList){ html+="</ul>"; inList=false; }
+    if (!l) continue;
+    if (/^#{1,4} /.test(l)) html += `<h4>${inline(l.replace(/^#+ /,""))}</h4>`;
+    else html += `<p>${inline(l)}</p>`;
+  }
+  if (inList) html += "</ul>";
+  return html;
+}
+
+function saveMix(t){
+  const o = {}; let tot = 0;
+  for (const [k] of BUCKETS){ const v = parseFloat($("#mx_"+k).value); if (isFinite(v) && v > 0){ o[k] = v/100; tot += v; } }
+  if (Math.abs(tot - 100) > 0.5){ toast(`The shares add to ${Math.round(tot)}%. Make them add to 100%.`); return; }
+  OVR[t] = {...(OVR[t]||{}), tx:o}; saveSettings(); recalcOne(t); toast(`Saved the tax mix for ${t}`);
+}
+
+/* ------------------------------------------------------------ analysis (Claude) */
+async function runAnalysis(t){
+  const s = BY.get(t), R = RES.get(t) || calc(s, readInputs());
+  const box = $("#anaBox"); if (!box) return;
+  const btn = $("#genAnalysis"); if (btn) btn.disabled = true;
+  box.innerHTML = `<p class="note">Writing the analysis…</p>`;
+  const facts = {ticker:s.t, name:s.n, structure:s.st, category:s.ty, group:s.grp, styleBox:s.sty, sponsor:s.sp, inception:s.inc, benchmark:s.bench,
+    managers:s.mgr, strategy:s.strat, taxNotes:s.tax, optionsUsed:s.optx, leverage:s.levPct ?? s.lev, distributionPolicy:s.pol,
+    price:s.p, nav:s.nav, premiumDiscount:s.prem, discountHistory1y:s.disc, assets:s.aum, expenseRatio:s.er,
+    distributions:{frequency:s.f, latestRegular:s.reg, forwardYield:R.fy, trailingYield:R.ty, growth12m:R.dg, cuts3y:s.cuts, byYear:s.dby, recent:(s.dh||[]).slice(-12)},
+    taxMixUsed:R.mix, afterTaxYield:R.aty, userRates:{federalOrdinary:R.at.fo, qualified:R.at.fc, state:R.at.st, niit:R.at.niit},
+    performance:s.pf, beta:s.beta, holdings:s.hold ? {top:s.hold.top, sectors:s.hold.sectors, assets:s.hold.assets} : null,
+    options:{frequency:s.o?.f, coveredCallEstimate: R.cc?.value!=null ? {annualReturn:R.cc.value, strike:R.cc.pick.k, delta:R.cc.pick.delta} : null},
+    peersInScreener: FUNDS.filter(x=>x.t!==s.t && (x.ty===s.ty || x.grp===s.grp)).slice(0,6).map(x=>({t:x.t, type:x.ty, fwdYield:RES.get(x.t)?.fy, tr3y:x.pf?.tr3y, er:x.er, prem:x.prem}))};
+  const prompt = `You are a fund analyst writing for an experienced individual investor who is a tax and accounting professional. Write an in-depth analysis of ${s.n} (${s.t}), a ${s.st}, using the data below plus your general knowledge of the fund and its sponsor.
+
+Use these sections, each as a "## " heading: What it owns and how it pays, The people running it, Distribution sustainability (compare the yield with total return, price trend and NAV trend; say whether the payout is being earned or partly returned capital), Costs and leverage, Tax treatment (use the tax mix and rates given; note return of capital basis effects, Section 1256, 199A or K-1 versus 1099 where relevant), ${s.st==="CEF"||s.st==="BDC"?"Premium or discount to NAV (current versus its 1-year range), ":""}Key risks, How it compares (against the peers listed and the obvious alternatives in its category).
+
+Rules: plain text with "## " headings and "- " bullets only. Be specific and quantitative, citing the figures provided. Be direct and balanced. Do not give buy or sell recommendations or promise returns. Do not use em dashes. Note briefly if your knowledge of recent events may be dated. About 700 words.
+
+DATA:
+${JSON.stringify(facts)}`;
+  try{
+    const res = await sample(prompt, {modelTier:"complex", onText: u => { box.innerHTML = renderMd(u.text) || `<p class="note">Thinking…</p>`; }});
+    const a = {text: res.text, at: new Date().toISOString(), price: s.p};
+    ANALYSES.set(t, a);
+    if (db) db.doc("analyses/" + t).set(a).catch(()=>{});
+    if (openTicker === t) renderDetail(t);
+  } catch(e){
+    box.innerHTML = `<p class="note">${e?.code==="rate_limited"?"Too many requests right now. Try again in a minute.":e?.code==="not_granted"?"Claude access wasn't granted for this page.":"The analysis couldn't be generated. Try again."}</p>`;
+  }
+}
+
+/* ------------------------------------------------------------ add / remove funds */
+const TICKER_RE = /^[A-Z][A-Z0-9]{0,6}$/;
+$("#addForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const t = $("#addT").value.trim().toUpperCase();
+  if (!TICKER_RE.test(t)){ toast("Enter a ticker symbol, like JEPI or UTG."); return; }
+  const w = WL.get(t);
+  if (BY.has(t) && w?.status !== "removed"){ toast(`${t} is already in the screener.`); openDetail(t); return; }
+  if (w && w.status === "pending"){ toast(`${t} is already waiting for the next sync.`); return; }
+  if (!db){ toast("Adding funds needs the data store, which isn't connected."); return; }
+  try{
+    const at = new Date().toISOString();
+    await db.doc("watchlist/" + t).set({ticker:t, status:"pending", addedAt:at});
+    await db.doc("refreshQueue/" + t).set({ticker:t, requestedAt:at, status:"queued"});
+    WL.set(t, {ticker:t, status:"pending"}); renderWL(); renderTable();
+    $("#addT").value = "";
+    toast(`Added ${t}. It appears after the next sync, within about two hours on weekdays.`);
+  } catch(err){ toast("Only editors can add funds."); }
+});
+async function removeFund(t){
+  try{
+    await db.doc("watchlist/" + t).set({ticker:t, status:"removed", removedAt:new Date().toISOString()});
+    WL.set(t, {ticker:t, status:"removed"});
+    closeDetail(); renderTable(); renderWL();
+    toast(`Removed ${t}.`);
+  } catch(err){ toast("Only editors can remove funds."); }
+}
+async function dismissWL(t){ try{ await db.doc("watchlist/" + t).delete(); }catch(e){} }
+function renderWL(){
+  const el = $("#wl");
+  const pend = [...WL.values()].filter(w => w.status === "pending" && !BY.has(w.ticker));
+  const bad = [...WL.values()].filter(w => w.status === "not_found");
+  if (!pend.length && !bad.length){ el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.innerHTML = pend.map(w => `<span class="chip">${esc(w.ticker)}: adding at next sync <button type="button" data-cancel="${esc(w.ticker)}" aria-label="Cancel adding ${esc(w.ticker)}">Cancel</button></span>`).join("")
+    + bad.map(w => `<span class="chip bad">${esc(w.ticker)}: no market data found for this ticker <button type="button" data-cancel="${esc(w.ticker)}" aria-label="Dismiss ${esc(w.ticker)}">Dismiss</button></span>`).join("");
+}
+$("#wl").addEventListener("click", e => { const b = e.target.closest("[data-cancel]"); if (b){ const t = b.dataset.cancel; WL.delete(t); renderWL(); dismissWL(t); db?.doc("refreshQueue/" + t).delete().catch(()=>{}); } });
+
+/* ------------------------------------------------------------ refresh queue */
+async function queueRefresh(tickers){
+  if (!db){ toast("Refresh requests need the data store, which isn't connected."); return; }
+  try{
+    const at = new Date().toISOString();
+    for (const t of tickers) await db.doc("refreshQueue/" + t).set({ticker:t, requestedAt:at, status:"queued"});
+    tickers.forEach(t => QUEUE.set(t, {status:"queued"}));
+    toast(tickers.length===1 && tickers[0]!=="ALL" ? `Queued fresh data for ${tickers[0]}. It's picked up at the next sync.` : "Queued a full data refresh. It's picked up at the next sync.");
+    if (openTicker) renderDetail(openTicker);
+  } catch(e){ toast("Only editors can queue a data refresh."); }
+}
+$("#refreshAll").addEventListener("click", () => queueRefresh(["ALL"]));
+
+/* ------------------------------------------------------------ settings */
+function applyInputs(A){ $("#inFo").value=A.fo??24; $("#inFc").value=A.fc??15; $("#inSt").value=A.st??0; $("#inNiit").value=A.niit??"no"; $("#inYb").value=A.yb??"fwd"; $("#inAmt").value=A.amt??10000; $("#inD").value=A.cd??0.3; $("#inP").value=A.cp??"bid"; }
+let saveT = null;
+function saveSettings(){
+  const payload = {assumptions: APPLIED || readInputs(), overrides: OVR, savedAt: new Date().toISOString()};
+  try{ localStorage.setItem("fls-settings", JSON.stringify(payload)); }catch(e){}
+  if (!db || !canWrite) return;
+  clearTimeout(saveT); saveT = setTimeout(() => db.doc("settings/main").set(payload).catch(()=>{ canWrite = false; }), 600);
+}
+function loadLocal(){ try{ const p = JSON.parse(localStorage.getItem("fls-settings")||"null"); if (p){ if(p.assumptions) applyInputs(p.assumptions); OVR = p.overrides||{}; } }catch(e){} }
+
+/* ------------------------------------------------------------ data */
+function ingest(chunks){
+  const list = [];
+  for (const c of chunks) for (const s of (c.funds||[])) list.push(s);
+  list.sort((a,b)=>a.t.localeCompare(b.t));
+  FUNDS = list; BY = new Map(list.map(s=>[s.t,s]));
+  fillSelect("#fGrp", "All groups", [...new Set(list.map(s=>s.grp).filter(Boolean))].sort());
+  fillSelect("#fSt", "Any structure", [...new Set(list.map(s=>s.st).filter(Boolean))].sort());
+  fillTypes();
+  recalcAll(true); renderWL();
+}
+function showMeta(){
+  if (!META) return;
+  $("#dataAsOf").textContent = META.generated ? `Data as of ${new Date(META.generated).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}` : "";
+  $("#fundCount").textContent = META.count ? `${META.count} funds tracked` : "";
+}
+
+async function boot(){
+  loadLocal(); APPLIED = readInputs(); renderHead(); updateHint();
+  const C = window.claude;
+  if (!C?.use){ $("#srcStatus").innerHTML = `<span class="dot"></span>Open this page in Claude to load data`; emptyState(); return; }
+  C.use("sample").then(x => { sample = x; if (openTicker && detailTab==="analysis") renderDetail(openTicker); });
+  db = await C.use("db");
+  if (!db){ $("#srcStatus").innerHTML = `<span class="dot"></span>Data store unavailable in this view`; emptyState(); return; }
+  try{ const u = await C.use("user"); if (u && u.can && u.can("data.write") === false) canWrite = false; }catch(e){}
+  $("#srcStatus").innerHTML = `<span class="dot live"></span>Live data store`;
+  try{
+    const st = await db.doc("settings/main").get();
+    if (st.exists){ const p = st.data(); if (p.assumptions) applyInputs(p.assumptions); OVR = p.overrides || OVR; APPLIED = readInputs(); }
+  }catch(e){}
+  db.doc("meta/info").onSnapshot(d => { META = d.exists ? d.data() : null; showMeta(); }, ()=>{});
+  db.collection("chunks").onSnapshot(qs => {
+    const ch = qs.docs.map(d=>d.data());
+    if (!ch.length){ emptyState(); return; }
+    ingest(ch);
+  }, () => emptyState("The data store couldn't be read. Reload the page to try again."));
+  db.collection("refreshQueue").onSnapshot(qs => { QUEUE = new Map(qs.docs.map(d=>[d.id, d.data()]).filter(([,v])=>v.status==="queued")); if (openTicker) renderDetail(openTicker); }, ()=>{});
+  db.collection("watchlist").onSnapshot(qs => { WL = new Map(qs.docs.map(d=>[d.id, d.data()])); renderWL(); if (FUNDS.length) renderTable(); }, ()=>{});
+  db.collection("analyses").onSnapshot(qs => { ANALYSES = new Map(qs.docs.map(d=>[d.id, d.data()])); if (openTicker && detailTab==="analysis") renderDetail(openTicker); }, ()=>{});
+}
+function emptyState(msg){
+  if (FUNDS.length) return;
+  $("#tbody").innerHTML = `<tr><td colspan="${visCols().length}" class="empty">${esc(msg || "No fund data loaded yet. The table fills after the first sync. Add a fund with the box at the top.")}</td></tr>`;
+  $("#count").textContent = "";
+}
+boot();
+})();
+</script>
