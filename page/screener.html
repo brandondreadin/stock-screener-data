@@ -186,6 +186,8 @@ tbody tr:hover{background:var(--accent-soft)}
       <div class="field"><label for="inCap">Growth rate cap</label><div class="pct"><input id="inCap" type="number" step="1" min="2" max="50" value="15"></div></div>
       <div class="field"><label for="inY">Graham discount yield (Y)</label><select id="inY"><option value="aaa">AAA corporate bond yield</option><option value="r">Desired return</option></select></div>
       <div class="field"><label for="inMax">Ignore values above</label><div class="pct x"><input id="inMax" type="number" step="0.5" min="1" max="100" value="5"></div></div>
+      <div class="field"><label for="inD">Covered call delta</label><input id="inD" type="number" step="0.05" min="0.05" max="0.95" value="0.30" class="mono"></div>
+      <div class="field"><label for="inP">Call premium at</label><select id="inP"><option value="bid">Bid (what a sale fills at)</option><option value="mid">Mid (between bid and ask)</option></select></div>
       <div class="field"><label for="inG">Historical growth measured as</label><select id="inG"><option value="cagr">Compound annual (CAGR)</option><option value="mean">Mean of yearly changes</option></select></div>
     </div>
     <div class="row">
@@ -301,6 +303,36 @@ function industryPE(){
   }
 }
 
+/* ------------------------------------------------------------ covered calls */
+function normCdf(x){ // Abramowitz-Stegun 7.1.26
+  const t = 1/(1+0.3275911*Math.abs(x)/Math.SQRT2);
+  const y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-x*x/2);
+  return x >= 0 ? (1+y)/2 : (1-y)/2;
+}
+const PERIODS = {Weekly:52, Monthly:12, Quarterly:4};
+function ccCalc(s, A){
+  const o = s.o?.cc;
+  if (!o || !s.p) return {value:null, why: s.o?.f && s.o.f!=="None" ? "No option chain captured for this stock yet." : "No listed options."};
+  const T = Math.max(o.d, 1)/365, r = (META?.rf?.value ?? 4)/100, q = s.div > 0 ? s.div/s.p : 0;
+  const rows = [];
+  for (const [k, b, a, iv, oi] of o.ch){
+    const prem = A.cp === "mid" ? (b > 0 && a > 0 ? (b+a)/2 : b) : b;
+    let delta = null;
+    if (iv > 0.01 && iv < 4){
+      const d1 = (Math.log(s.p/k) + (r - q + iv*iv/2)*T)/(iv*Math.sqrt(T));
+      delta = Math.exp(-q*T)*normCdf(d1);
+    }
+    rows.push({k, b, a, iv, oi, prem, delta});
+  }
+  const usable = rows.filter(x => x.delta != null && x.prem > 0);
+  if (!usable.length) return {value:null, why:"No call in the chain had both a quote and a usable implied volatility.", rows, exp:o.e, dte:o.d, cycle:o.f};
+  const pick = usable.reduce((best, x) => Math.abs(x.delta - A.cd) < Math.abs(best.delta - A.cd) ? x : best);
+  const n = PERIODS[o.f] || Math.round(365/Math.max(o.d,1));
+  const income = pick.prem*100*n, mv = s.p*100;
+  return {value: income/mv, pick, rows, n, income, mv, exp:o.e, dte:o.d, cycle:o.f, rf:r, target:A.cd,
+          perPeriod: pick.prem/s.p, ifCalled: (pick.k - s.p)/s.p};
+}
+
 function calc(s, A){
   const r = A.r/100, tg = A.tg/100, cap = A.cap/100;
   const o = OVR[s.t] || {};
@@ -380,6 +412,7 @@ function calc(s, A){
   const vals = [out.graham, out.dcf, out.mult, out.book].filter(m=>m.value!=null && isFinite(m.value) && m.value>0 && !m.off).map(m=>m.value);
   out.avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
   out.n = vals.length;
+  out.cc = ccCalc(s, A);
   out.upside = out.avg && s.p ? out.avg/s.p - 1 : null;
   return out;
 }
@@ -428,6 +461,7 @@ const COLS = [
   {k:"dyl", h:"Div yld", v:s=>s.div&&s.p?s.div/s.p:0, f:s=>s.div>0&&s.p?pct(s.div/s.p,2):`<span class="na">–</span>`},
   ...RATIO_COLS,
   {k:"opt", h:"Options", v:s=>({Weekly:3,Monthly:2,Quarterly:1}[s.o?.f]||0), f:s=>optPill(s.o?.f)},
+  {k:"ccr", h:"CC est. return", tip:"Estimated annual covered call income: premium × 100 shares × cycles per year ÷ market value of 100 shares", v:(s,R)=>R?.cc?.value, f:(s,R)=>R?.cc?.value!=null?`<span title="${esc(R.cc.cycle)} call, ${num(R.cc.pick.delta,2)} delta, $${num(R.cc.pick.k,2)} strike">${pct(R.cc.value,1)}</span>`:`<span class="na">–</span>`},
   {k:"act", h:"", nosort:true, f:s=>`<button class="btn small" type="button" data-recalc="${esc(s.t)}" title="Recalculate ${esc(s.t)} with the current assumptions">Recalc</button>`},
 ];
 function fcfLast(s){ const h = [...(s.h||[])].reverse().find(x=>x.fcf!=null); return h ? h.fcf : null; }
@@ -499,9 +533,9 @@ renderColMenu();
 /* ------------------------------------------------------------ recalculation */
 function readInputs(){
   const f = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
-  return {r: f("#inR",10), tg: f("#inTG",2.5), cap: f("#inCap",15), y: $("#inY").value, g: $("#inG").value, mx: f("#inMax",5)};
+  return {r: f("#inR",10), tg: f("#inTG",2.5), cap: f("#inCap",15), y: $("#inY").value, g: $("#inG").value, mx: f("#inMax",5), cd: f("#inD",0.3), cp: $("#inP").value};
 }
-function sameA(a,b){ return a && b && a.r===b.r && a.tg===b.tg && a.cap===b.cap && a.y===b.y && a.g===b.g && a.mx===b.mx; }
+function sameA(a,b){ return a && b && a.r===b.r && a.tg===b.tg && a.cap===b.cap && a.y===b.y && a.g===b.g && a.mx===b.mx && a.cd===b.cd && a.cp===b.cp; }
 function updateHint(){
   const cur = readInputs();
   const yTxt = cur.y==="aaa" ? `Graham uses the AAA yield${META?.aaa?` (${META.aaa.value.toFixed(2)}%)`:""}` : "Graham uses the desired return as Y";
@@ -523,7 +557,7 @@ function recalcOne(t){
   toast(`Recalculated ${t} at a ${A.r}% desired return`);
 }
 $("#recalcAll").addEventListener("click", () => recalcAll(false));
-["#inR","#inTG","#inCap","#inY","#inG","#inMax"].forEach(id => $(id).addEventListener("input", updateHint));
+["#inR","#inTG","#inCap","#inY","#inG","#inMax","#inD","#inP"].forEach(id => $(id).addEventListener("input", updateHint));
 
 /* ------------------------------------------------------------ detail */
 function openDetail(t){
@@ -690,7 +724,8 @@ Present value  = ${money(mu.fut)} ÷ (1 + ${R.at.r}%)^10 = ${money(mu.value)}</d
       <p>${optPill(o.f)} &nbsp;${o.f==="Weekly"?"Weekly expirations are listed, so you can write covered calls every week as well as on the standard monthly cycle.":o.f==="Monthly"?"Options expire on the standard monthly cycle (third Friday), with longer-dated quarterly and LEAPS contracts further out.":"Only a few expirations are listed, mostly quarterly or longer-dated."}</p>
       <h3>Next expirations</h3><div style="display:flex;flex-wrap:wrap;gap:6px">${ex}</div>
     </section>
-    ${c?`<section style="display:grid;gap:10px"><h3>Covered call snapshot, about 30 days out</h3>
+    ${ccSection(s, R)}
+    ${c?`<section style="display:grid;gap:10px"><h3>At-the-money call, about 30 days out</h3>
       <div class="kv"><div><span>Expiration</span><span>${esc(c.e)} (${c.d} days)</span></div><div><span>Strike (first at or above price)</span><span>${money(c.k)}</span></div><div><span>Bid / ask</span><span>${money(c.b)} / ${money(c.a)}</span></div><div><span>Mid premium</span><span>${money(c.m)}</span></div><div><span>Implied volatility</span><span>${pct(c.iv)}</span></div><div><span>Open interest</span><span>${c.oi?.toLocaleString?.()??"–"}</span></div><div><span>Premium / price</span><span>${pct(c.py,2)}</span></div><div><span>Annualized</span><span>${pct(c.ann,1)}</span></div></div>
       <p class="note">Premium per share at the mid quote as of the last data pull, before commissions. Annualized assumes the same premium could be collected each cycle, which varies with volatility.</p></section>`:""}`;
   }
@@ -710,6 +745,24 @@ Present value  = ${money(mu.fut)} ÷ (1 + ${R.at.r}%)^10 = ${money(mu.value)}</d
     </div>`;
   }
   return "";
+}
+
+function ccSection(s, R){
+  const c = R.cc;
+  if (!c || c.value == null) return `<section style="display:grid;gap:8px"><h3>Covered call estimated return</h3><p class="note">${esc(c?.why || "Not available.")}</p></section>`;
+  const p = c.pick;
+  return `<section style="display:grid;gap:10px"><h3>Covered call estimated return</h3>
+    <div class="vals"><div class="val avg"><span class="k">Estimated annual return</span><span class="v">${pct(c.value,1)}</span><span class="d note">${money(c.income)} a year on ${money(c.mv)} of stock</span></div>
+      <div class="val"><span class="k">Call sold</span><span class="v">${money(p.k)}</span><span class="d note">${num(p.delta,2)} delta · expires ${esc(c.exp)} (${c.dte} days)</span></div></div>
+    <div class="formula">${esc(c.cycle)} cycle: ${c.n} sales a year, 100 shares
+Premium (${R.at.cp==="mid"?"mid":"bid"})  ${money(p.prem)} × 100 = ${money(p.prem*100)} per sale
+Annual income       ${money(p.prem*100)} × ${c.n} = ${money(c.income)}
+Market value        ${money(s.p)} × 100 = ${money(c.mv)}
+Estimated return    ${money(c.income)} ÷ ${money(c.mv)} = ${pct(c.value,1)}</div>
+    <p class="note">Chooses the call whose delta is closest to ${num(c.target,2)}. Delta is calculated with Black-Scholes from each strike's implied volatility, the 3-month T-bill rate (${pct(c.rf,2)}) and the dividend yield. The estimate assumes the same premium each cycle and that shares are not called away; if they are, the stock gain up to the strike is ${pct(c.ifCalled,1)} on top of the premium.</p>
+    <div class="hist"><table><thead><tr><th class="l">Strike</th><th>Bid</th><th>Ask</th><th>Implied vol</th><th>Delta</th><th>Open interest</th></tr></thead><tbody>
+    ${c.rows.map(x=>`<tr${x===p?` style="background:var(--accent-soft);font-weight:600"`:""}><td class="l num">${money(x.k)}</td><td class="num">${money(x.b)}</td><td class="num">${money(x.a)}</td><td class="num">${pct(x.iv,0)}</td><td class="num">${num(x.delta,2)}</td><td class="num">${x.oi?.toLocaleString?.()??"–"}</td></tr>`).join("")}
+    </tbody></table></div></section>`;
 }
 
 function renderMd(t){
@@ -746,7 +799,7 @@ async function runAnalysis(t){
     ratios:s.r, epsTTM:s.eps, bookValuePerShare:s.bv, dividendTTM:s.div, freeCashFlowPerShareLatest10K:fcfLast(s),
     history:(s.h||[]).map(h=>({fyEnd:h.e, revenue:h.rev, netIncome:h.ni, eps:h.eps, bvps:h.bv, fcfps:h.fcf, dps:h.dps})),
     valuations:{desiredReturn:R.at.r+"%", graham:R.graham.value, dcf:R.dcf.value, multiples:R.mult.value, industryPE:R.mult.indPE, bookPlusDividends:R.book.value, average:R.avg, growthUsed:R.g},
-    options:{frequency:s.o?.f, thirtyDayATMCall:s.o?.cs}
+    options:{frequency:s.o?.f, thirtyDayATMCall:s.o?.cs, coveredCallEstimate: R.cc?.value!=null ? {annualReturn:R.cc.value, strike:R.cc.pick.k, delta:R.cc.pick.delta, premium:R.cc.pick.prem, expiration:R.cc.exp, salesPerYear:R.cc.n} : null}
   };
   const prompt = `You are an equity analyst writing for an experienced individual investor who is a tax and accounting professional. Write an in-depth analysis of ${s.n} (${s.t}) using the data below plus your general knowledge of the company.
 
@@ -819,7 +872,7 @@ async function queueRefresh(tickers){
 $("#refreshAll").addEventListener("click", () => queueRefresh(["ALL"]));
 
 /* ------------------------------------------------------------ settings */
-function applyInputs(A){ $("#inR").value=A.r; $("#inTG").value=A.tg; $("#inCap").value=A.cap; $("#inY").value=A.y; $("#inG").value=A.g; $("#inMax").value=A.mx ?? 5; }
+function applyInputs(A){ $("#inR").value=A.r; $("#inTG").value=A.tg; $("#inCap").value=A.cap; $("#inY").value=A.y; $("#inG").value=A.g; $("#inMax").value=A.mx ?? 5; $("#inD").value=A.cd ?? 0.3; $("#inP").value=A.cp ?? "bid"; }
 let saveT = null;
 function saveSettings(){
   const payload = {assumptions: APPLIED || readInputs(), overrides: OVR, savedAt: new Date().toISOString()};
