@@ -1,4 +1,1 @@
 # Stocks added outside the S&P 500, one ticker per line. Managed by the screener sync.
-CROX
-RY
-ZZZZQ
