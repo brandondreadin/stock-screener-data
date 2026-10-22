@@ -51,6 +51,9 @@ def compact(s):
     exps = o.get("expirations") or []
     freq = classify_expirations([dt.date.fromisoformat(e) for e in exps]) if exps else o.get("frequency")
     opt = {"f": freq, "x": exps[:10]}
+    cc = o.get("cc")
+    if cc:
+        opt["cc"] = {"f": cc["cycle"], "e": cc["expiration"], "d": cc["dte"], "ch": cc["chain"]}
     if cs:
         opt["cs"] = {"e": cs["expiration"], "d": cs["dte"], "k": cs["strike"], "b": cs["bid"], "a": cs["ask"],
                      "m": cs["mid"], "iv": cs["iv"], "oi": cs["openInterest"], "py": cs["premiumYield"], "ann": cs["annualized"]}
@@ -98,7 +101,7 @@ def main():
         with open(f"{OUT}/chunk_{i:02d}.json", "w") as f:
             json.dump({"stocks": c}, f, separators=(",", ":"))
     with open(f"{OUT}/meta.json", "w") as f:
-        json.dump({"generated": d["generated"], "aaa": d.get("aaaYield"), "count": len(stocks), "chunks": len(chunks),
+        json.dump({"generated": d["generated"], "aaa": d.get("aaaYield"), "rf": d.get("riskFree"), "count": len(stocks), "chunks": len(chunks),
                    "custom": sorted(s["t"] for s in stocks if s.get("c")), "notFound": missing}, f)
     sizes = [os.path.getsize(f"{OUT}/chunk_{i:02d}.json") for i in range(len(chunks))]
     print(f"{len(stocks)} stocks in {len(chunks)} chunks, largest {max(sizes)//1024} KiB")

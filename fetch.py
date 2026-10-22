@@ -106,6 +106,20 @@ def custom_entries(tickers):
 
 
 # ---------------------------------------------------------------- FRED Aaa
+def fred_latest(series):
+    try:
+        r = requests.get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}", headers=UA, timeout=30)
+        r.raise_for_status()
+        for d, v in reversed([l.split(",") for l in r.text.strip().splitlines()[1:]]):
+            try:
+                return {"value": float(v), "date": d}
+            except ValueError:
+                continue
+    except Exception as e:
+        print(f"FRED {series} failed:", e)
+    return None
+
+
 def aaa_yield():
     try:
         r = requests.get("https://fred.stlouisfed.org/graph/fredgraph.csv?id=DAAA", headers=UA, timeout=30)
@@ -329,7 +343,47 @@ def options_profile(tk, price):
                 }
     except Exception as e:
         out["callSnapshotError"] = str(e)[:120]
+
+    # Covered-call chain for one cycle expiration, so the page can pick the strike nearest a target delta
+    try:
+        if price and freq in ("Weekly", "Monthly", "Quarterly"):
+            exp = cycle_expiration(dates, freq)
+            if exp:
+                ch = tk.option_chain(exp.isoformat()).calls
+                ch = ch[(ch["strike"] >= price * 0.95) & (ch["strike"] <= price * 1.4)].sort_values("strike").head(40)
+                rows = []
+                for _, c in ch.iterrows():
+                    bid, ask, iv = clean(c.get("bid")), clean(c.get("ask")), clean(c.get("impliedVolatility"))
+                    oi = c.get("openInterest")
+                    rows.append([rnd(c["strike"], 2), rnd(bid, 2), rnd(ask, 2), rnd(iv, 4),
+                                 int(oi) if oi is not None and not pd.isna(oi) else None])
+                if rows:
+                    out["cc"] = {"cycle": freq, "expiration": exp.isoformat(), "dte": (exp - TODAY).days, "chain": rows}
+    except Exception as e:
+        out["ccError"] = str(e)[:120]
     return out
+
+
+def cycle_expiration(dates, freq):
+    """The expiration a covered-call writer on this cycle would sell next.
+    Weekly: first Friday expiration 4 to 11 days out. Monthly: standard monthly (third Friday) nearest 30 days,
+    at least 14 out. Quarterly: nearest 91 days."""
+    fut = [d for d in dates if (d - TODAY).days >= 1]
+    if not fut:
+        return None
+    if freq == "Weekly":
+        wk = [d for d in fut if d.weekday() == 4 and 4 <= (d - TODAY).days <= 11]
+        if wk:
+            return wk[0]
+        target = 7
+    elif freq == "Monthly":
+        mo = [d for d in fut if 15 <= d.day <= 21 and d.weekday() in (3, 4) and (d - TODAY).days >= 14]
+        if mo:
+            return min(mo, key=lambda d: abs((d - TODAY).days - 30))
+        target = 30
+    else:
+        target = 91
+    return min(fut, key=lambda d: abs((d - TODAY).days - target))
 
 
 def yahoo(ticker):
@@ -476,6 +530,7 @@ def main():
     payload = {
         "generated": dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "aaaYield": aaa_yield(),
+        "riskFree": fred_latest("DGS3MO"),
         "count": len(merged),
         "stocks": sorted(merged.values(), key=lambda s: s["ticker"]),
     }
