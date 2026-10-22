@@ -1,0 +1,46 @@
+name: Refresh fund data
+
+on:
+  schedule:
+    - cron: "52 21 * * 1-5"   # weekdays after US market close
+  workflow_dispatch:
+    inputs:
+      tickers:
+        description: "Tickers to refresh (space or comma separated). Leave blank for every fund in funds/watchlist.txt."
+        required: false
+        default: ""
+      probe:
+        description: "Diagnostics only"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-funds
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q yfinance pandas requests
+      - if: ${{ github.event.inputs.probe != '' }}
+        run: python funds/probe.py
+      - if: ${{ github.event.inputs.probe == '' }}
+        run: python funds/fetch_funds.py ${{ github.event.inputs.tickers }}
+      - if: ${{ github.event.inputs.probe == '' }}
+        name: Commit data
+        run: |
+          git config user.name "stock-screener-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add funds/data/funds.json
+          git diff --cached --quiet || git commit -m "Fund data refresh $(date -u +%Y-%m-%dT%H:%MZ) ${{ github.event.inputs.tickers }}"
+          git pull --rebase -q || true
+          git push
