@@ -6,7 +6,6 @@ import json, os, sys, datetime as dt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-from fetch import classify_expirations
 
 SRC = os.path.join(HERE, "data", "funds.json")
 PROFILES = os.path.join(HERE, "profiles.json")
@@ -57,15 +56,6 @@ def compact(f, prof):
     pf = f.get("perf") or {}
     nav = f.get("nav") or {}
     p = y.get("price")
-    o = f.get("options") or {}
-    exps = o.get("expirations") or []
-    opt = {"f": classify_expirations([dt.date.fromisoformat(e) for e in exps]) if exps else o.get("frequency"), "x": exps[:10]}
-    cc, cs = o.get("cc"), o.get("callSnapshot")
-    if cc:
-        opt["cc"] = {"f": cc["cycle"], "e": cc["expiration"], "d": cc["dte"], "ch": cc["chain"]}
-    if cs:
-        opt["cs"] = {"e": cs["expiration"], "d": cs["dte"], "k": cs["strike"], "b": cs["bid"], "a": cs["ask"],
-                     "m": cs["mid"], "iv": cs["iv"], "oi": cs["openInterest"], "py": cs["premiumYield"], "ann": cs["annualized"]}
     struct = prof.get("struct") or ("ETF" if y.get("quoteType") == "ETF" else "Other")
     er = prof.get("er")
     er_src = "Sponsor via CEF Connect" if er is not None else None
@@ -97,7 +87,7 @@ def compact(f, prof):
         "nm": f.get("navMonthly") or [], "hold": f.get("hold"),
         "beta": r(y.get("beta3Year") or y.get("beta"), 2), "h52": y.get("fiftyTwoWeekHigh"), "l52": y.get("fiftyTwoWeekLow"),
         "ma50": r(y.get("fiftyDayAverage"), 2), "ma200": r(y.get("twoHundredDayAverage"), 2),
-        "av": y.get("averageDailyVolume3Month") or y.get("averageVolume"), "o": opt,
+        "av": y.get("averageDailyVolume3Month") or y.get("averageVolume"),
         "mgr": prof.get("mgr"), "strat": prof.get("strat"), "tax": prof.get("tax"), "optx": prof.get("opt"), "bench": prof.get("bench"),
         "tx": tax_mix(t, prof), "src": prof.get("src"),
         "sum": (y.get("longBusinessSummary") or "")[:1200], "web": y.get("website"), "u": f.get("updated"),

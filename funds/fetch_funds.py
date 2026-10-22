@@ -3,7 +3,7 @@ Pull market data for the fund screener (ETFs, closed-end funds, BDCs, baby bonds
 
 Sources
   - Yahoo Finance (yfinance): price, NAV, assets, expense ratio, distributions, price history,
-    holdings and sector weights, option expirations and covered-call chains.
+    holdings and sector weights.
   - Yahoo NAV symbols (X<ticker>X) for closed-end fund NAV history, used for premium/discount history.
   - funds/profiles.json: curated category, style box, managers, strategy and tax notes (merged in compact_funds.py).
 
@@ -18,7 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import pandas as pd
 import yfinance as yf
-from fetch import clean, rnd, options_profile  # shared helpers from the stock pipeline
+from fetch import clean, rnd  # shared helpers from the stock pipeline
 
 OUT = os.path.join(HERE, "data", "funds.json")
 WATCHLIST = os.path.join(HERE, "watchlist.txt")
@@ -298,10 +298,6 @@ def build(ticker):
     elif y.get("navPrice"):
         nav = {"v": y["navPrice"], "src": "Yahoo NAV"}
     rec["nav"] = nav
-    try:
-        rec["options"] = options_profile(tk, price)
-    except Exception as e:
-        rec["errors"].append(f"options: {e}")
     if not price:
         rec["errors"].append("no price found")
     rec["updated"] = dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")

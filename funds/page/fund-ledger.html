@@ -216,8 +216,6 @@ tbody tr:hover{background:var(--accent-soft)}
       <div class="field"><label for="inNiit">Net investment income tax</label><select id="inNiit"><option value="no">Not subject (3.8% off)</option><option value="yes">Subject (add 3.8%)</option></select></div>
       <div class="field"><label for="inYb">Yield basis</label><select id="inYb"><option value="fwd">Forward (latest regular × frequency)</option><option value="ttm">Trailing 12 months paid</option></select></div>
       <div class="field"><label for="inAmt">Income on an investment of</label><input id="inAmt" type="number" step="1000" min="100" value="10000" class="mono"></div>
-      <div class="field"><label for="inD">Covered call delta</label><input id="inD" type="number" step="0.05" min="0.05" max="0.95" value="0.30" class="mono"></div>
-      <div class="field"><label for="inP">Call premium at</label><select id="inP"><option value="bid">Bid (what a sale fills at)</option><option value="mid">Mid (between bid and ask)</option></select></div>
     </div>
     <div class="row">
       <span class="hint" id="assumeHint">After-tax yield applies these rates to each fund's distribution tax mix.</span>
@@ -231,7 +229,6 @@ tbody tr:hover{background:var(--accent-soft)}
     <select id="fType" aria-label="Category"><option value="">All categories</option></select>
     <select id="fSt" aria-label="Structure"><option value="">Any structure</option></select>
     <select id="fFreq" aria-label="Distribution frequency"><option value="">Any payout schedule</option><option>Weekly</option><option>Monthly</option><option>Quarterly</option><option>Semiannual</option><option>Annual</option></select>
-    <select id="fOpt" aria-label="Options frequency"><option value="">Any options</option><option value="Weekly">Weekly options</option><option value="Monthly">Monthly options</option><option value="Quarterly">Quarterly options</option><option value="None">No options</option></select>
     <label class="chk"><input type="checkbox" id="fDisc"> Below NAV</label>
     <label class="chk"><input type="checkbox" id="fMon"> Pays monthly or weekly</label>
     <button class="btn" type="button" id="addFilter">+ Add filter</button>
@@ -301,35 +298,6 @@ function rates(A){
     s1256:(0.6*A.fc+0.4*A.fo+A.st+n)/100, reit:(0.8*A.fo+A.st+n)/100, roc:0};
 }
 
-/* ------------------------------------------------------------ covered calls */
-function normCdf(x){ // Abramowitz-Stegun 7.1.26
-  const t = 1/(1+0.3275911*Math.abs(x)/Math.SQRT2);
-  const y = 1 - (((((1.061405429*t - 1.453152027)*t) + 1.421413741)*t - 0.284496736)*t + 0.254829592)*t*Math.exp(-x*x/2);
-  return x >= 0 ? (1+y)/2 : (1-y)/2;
-}
-const PERIODS = {Weekly:52, Monthly:12, Quarterly:4};
-function ccCalc(s, A){
-  const o = s.o?.cc;
-  if (!o || !s.p) return {value:null, why: s.o?.f && s.o.f!=="None" ? "No option chain captured for this fund yet." : "No listed options."};
-  const T = Math.max(o.d, 1)/365, r = 0.04, q = s.ttm > 0 ? Math.min(s.ttm/s.p, 0.5) : 0;
-  const rows = [];
-  for (const [k, b, a, iv, oi] of o.ch){
-    const prem = A.cp === "mid" ? (b > 0 && a > 0 ? (b+a)/2 : b) : b;
-    let delta = null;
-    if (iv > 0.01 && iv < 4){
-      const d1 = (Math.log(s.p/k) + (r - q + iv*iv/2)*T)/(iv*Math.sqrt(T));
-      delta = Math.exp(-q*T)*normCdf(d1);
-    }
-    rows.push({k, b, a, iv, oi, prem, delta});
-  }
-  const usable = rows.filter(x => x.delta != null && x.prem > 0);
-  if (!usable.length) return {value:null, why:"No call in the chain had both a quote and a usable implied volatility.", rows, exp:o.e, dte:o.d, cycle:o.f};
-  const pick = usable.reduce((best, x) => Math.abs(x.delta - A.cd) < Math.abs(best.delta - A.cd) ? x : best);
-  const n = PERIODS[o.f] || Math.round(365/Math.max(o.d,1));
-  const income = pick.prem*100*n, mv = s.p*100;
-  return {value: income/mv, pick, rows, n, income, mv, exp:o.e, dte:o.d, cycle:o.f, rf:r, target:A.cd, ifCalled:(pick.k - s.p)/s.p};
-}
-
 /* ------------------------------------------------------------ per-fund math */
 function calc(s, A){
   const fy = s.fwd && s.p ? s.fwd/s.p : null, ty = s.ttm && s.p ? s.ttm/s.p : null;
@@ -339,14 +307,13 @@ function calc(s, A){
   const aty = y != null ? y*keep : null;
   const sh = s.p ? A.amt/s.p : null;
   return {at:A, y, fy, ty, mix, R, keep, aty, sh, income: y!=null ? A.amt*y : null, afterIncome: aty!=null ? A.amt*aty : null,
-    perPay: sh && (s.reg||s.last) ? sh*(s.reg||s.last) : null, dg: s.pttm ? s.ttm/s.pttm - 1 : null, cc: ccCalc(s, A)};
+    perPay: sh && (s.reg||s.last) ? sh*(s.reg||s.last) : null, dg: s.pttm ? s.ttm/s.pttm - 1 : null};
 }
 
 /* ------------------------------------------------------------ columns */
 const pf = (s,k) => s.pf?.[k];
 const rpct = (v,d=1) => v==null||!isFinite(v) ? na : pct(v,d);
 const freqPill = f => !f ? `<span class="pill">None</span>` : `<span class="pill ${({Weekly:"w",Monthly:"m",Quarterly:"q"})[f]||""}">${esc(f)}</span>`;
-const optPill = f => (!f || f==="None") ? `<span class="pill">None</span>` : `<span class="pill ${({Weekly:"w",Monthly:"m",Quarterly:"q"})[f]||""}">${esc(f)}</span>`;
 const stPill = st => `<span class="pill ${({ETF:"q",CEF:"m",BDC:"w"})[st]||""}">${esc(st)}</span>`;
 const premCell = v => v==null||!isFinite(v) ? na : `<span class="${v<0?"up":v>0.02?"down":""}" title="${v<0?"Trading below NAV":"Trading above NAV"}">${spct(v,1)}</span>`;
 
@@ -370,7 +337,6 @@ const MORE_COLS = [
   {k:"avol", h:"Avg volume",   tip:"Average daily shares traded, 3 months", on:false, v:s=>s.av, f:s=>s.av?Math.round(s.av).toLocaleString():na},
   {k:"to",   h:"Turnover",     tip:"Annual holdings turnover from the latest report (ETFs)", on:false, v:s=>s.hold?.turnover, f:s=>s.hold?.turnover!=null?pct(s.hold.turnover,0):na},
   {k:"hpe",  h:"Holdings P/E", tip:"Weighted price / earnings of the fund's stock holdings (ETFs)", on:false, v:s=>s.hold?.eq?.pe, f:s=>s.hold?.eq?.pe?num(s.hold.eq.pe,1):na},
-  {k:"cc",   h:"CC est. return", tip:"Estimated annual covered call income on the fund itself: premium × 100 shares × cycles per year ÷ value of 100 shares", on:false, v:(s,R)=>R?.cc?.value, f:(s,R)=>R?.cc?.value!=null?`<span title="${esc(R.cc.cycle)} call, ${num(R.cc.pick.delta,2)} delta, $${num(R.cc.pick.k,2)} strike">${pct(R.cc.value,1)}</span>`:na},
 ].map(c => ({...c, opt:true}));
 let VIS = new Set(MORE_COLS.filter(c=>c.on).map(c=>c.k));
 try{ const v = JSON.parse(localStorage.getItem("fls-cols")||"null"); if (Array.isArray(v)) VIS = new Set(v); }catch(e){}
@@ -390,7 +356,6 @@ const COLS = [
   {k:"tr1", h:"1y TR", tip:"1-year total return with distributions reinvested", v:s=>pf(s,"tr1y"), f:s=>sgn(pf(s,"tr1y"))},
   {k:"tr3", h:"3y TR / yr", tip:"3-year total return, annualized", v:s=>pf(s,"tr3y"), f:s=>sgn(pf(s,"tr3y"))},
   ...MORE_COLS.filter(c=>c.k!=="aty"),
-  {k:"opt", h:"Options", v:s=>({Weekly:3,Monthly:2,Quarterly:1}[s.o?.f]||0), f:s=>optPill(s.o?.f)},
   {k:"act", h:"", nosort:true, f:s=>`<button class="btn small" type="button" data-recalc="${esc(s.t)}" title="Recalculate ${esc(s.t)} with the current assumptions">Recalc</button>`},
 ];
 const visCols = () => COLS.filter(c => !c.opt || VIS.has(c.k));
@@ -400,7 +365,7 @@ function renderHead(){
 }
 function hay(s){ return [s.t, s.n, s.sp, s.mgr, s.ty, s.cat].join(" ").toLowerCase(); }
 function filtered(){
-  const q = $("#q").value.trim().toLowerCase(), g = $("#fGrp").value, ty = $("#fType").value, st = $("#fSt").value, fq = $("#fFreq").value, of = $("#fOpt").value;
+  const q = $("#q").value.trim().toLowerCase(), g = $("#fGrp").value, ty = $("#fType").value, st = $("#fSt").value, fq = $("#fFreq").value;
   const disc = $("#fDisc").checked, mon = $("#fMon").checked;
   return FUNDS.filter(s => {
     if (WL.get(s.t)?.status === "removed") return false;
@@ -409,7 +374,6 @@ function filtered(){
     if (ty && s.ty !== ty) return false;
     if (st && s.st !== st) return false;
     if (fq && s.f !== fq) return false;
-    if (of && (of === "None" ? (s.o?.f && s.o.f !== "None") : s.o?.f !== of)) return false;
     if (disc && !(s.prem < 0)) return false;
     if (mon && !(s.f === "Monthly" || s.f === "Weekly")) return false;
     if (FILTERS.length && !passFilters(s, RES.get(s.t))) return false;
@@ -438,7 +402,7 @@ $("#tbody").addEventListener("click", e => {
   const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t);
 });
 $("#tbody").addEventListener("keydown", e => { if (e.key==="Enter"){ const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t); } });
-["#q","#fType","#fSt","#fFreq","#fOpt","#fDisc","#fMon"].forEach(id => $(id).addEventListener("input", renderTable));
+["#q","#fType","#fSt","#fFreq","#fDisc","#fMon"].forEach(id => $(id).addEventListener("input", renderTable));
 $("#fGrp").addEventListener("input", () => { fillTypes(); renderTable(); });
 function fillSelect(sel, label, vals){
   const cur = $(sel).value;
@@ -464,7 +428,7 @@ renderColMenu();
 
 /* ------------------------------------------------------------ numeric filters */
 const UNITS = {p:"money", yld:"pct", ttm:"pct", aty:"pct", er:"pct", prem:"pct", aum:"bn", tr1:"pct", tr3:"pct", nav:"money", tr5:"pct", trytd:"pct",
-  pr3:"pct", pr1:"pct", vol:"pct", mdd:"pct", beta:"num", dg:"pct", cuts:"num", dav:"pct", dz:"num", lev:"pct", inc:"money", off:"pct", avol:"num", to:"pct", hpe:"num", cc:"pct"};
+  pr3:"pct", pr1:"pct", vol:"pct", mdd:"pct", beta:"num", dg:"pct", cuts:"num", dav:"pct", dz:"num", lev:"pct", inc:"money", off:"pct", avol:"num", to:"pct", hpe:"num"};
 const FIELDS = COLS.filter(c => UNITS[c.k]).map(c => ({k:c.k, h:c.h, u:UNITS[c.k], v:c.v}));
 const FIELD = new Map(FIELDS.map(f => [f.k, f]));
 const UNIT_LABEL = {money:"$", pct:"%", num:"", bn:"$B"};
@@ -527,12 +491,12 @@ $("#fbar").addEventListener("click", e => {
 renderFilters();
 
 /* ------------------------------------------------------------ recalculation */
-const INPUTS = ["#inFo","#inFc","#inSt","#inNiit","#inYb","#inAmt","#inD","#inP"];
+const INPUTS = ["#inFo","#inFc","#inSt","#inNiit","#inYb","#inAmt"];
 function readInputs(){
   const f = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
-  return {fo:f("#inFo",24), fc:f("#inFc",15), st:f("#inSt",0), niit:$("#inNiit").value, yb:$("#inYb").value, amt:Math.max(f("#inAmt",10000),1), cd:f("#inD",0.3), cp:$("#inP").value};
+  return {fo:f("#inFo",24), fc:f("#inFc",15), st:f("#inSt",0), niit:$("#inNiit").value, yb:$("#inYb").value, amt:Math.max(f("#inAmt",10000),1)};
 }
-const sameA = (a,b) => a && b && ["fo","fc","st","niit","yb","amt","cd","cp"].every(k => a[k]===b[k]);
+const sameA = (a,b) => a && b && ["fo","fc","st","niit","yb","amt"].every(k => a[k]===b[k]);
 function updateHint(){
   const c = readInputs(), n = c.niit==="yes" ? " plus 3.8% NIIT" : "";
   $("#assumeHint").innerHTML = sameA(c, APPLIED)
@@ -626,7 +590,7 @@ function renderDetail(t){
   const s = BY.get(t); if (!s) return;
   const R = RES.get(t) || calc(s, readInputs());
   const q = QUEUE.get(t);
-  const tabs = [["overview","Overview"],["income","Income & tax"],["perf","Performance"],["hold","Holdings"],["options","Options"],["mgr","Managers & strategy"],["analysis","In-depth analysis"]];
+  const tabs = [["overview","Overview"],["income","Income & tax"],["perf","Performance"],["hold","Holdings"],["mgr","Managers & strategy"],["analysis","In-depth analysis"]];
   $("#drawer").innerHTML = `
   <div class="dhead">
     <div class="r1">
@@ -768,20 +732,6 @@ function detailBody(s, R){
       ${h.bond?.dur?`<div><span>Duration</span><span>${num(h.bond.dur,1)} yrs</span></div>`:""}${h.turnover!=null?`<div><span>Turnover</span><span>${pct(h.turnover,0)}</span></div>`:""}
     </div>`;
   }
-  if (detailTab === "options"){
-    const o = s.o || {}, c = o.cs;
-    if (!o.f || o.f === "None") return `<p class="note">No listed options found for ${esc(s.t)}.</p>`;
-    const ex = (o.x||[]).map(d=>`<span class="pill">${esc(d)}</span>`).join(" ");
-    return `<section style="display:grid;gap:10px">
-      <h3>Expiration frequency</h3>
-      <p>${optPill(o.f)} &nbsp;${o.f==="Weekly"?"Weekly expirations are listed, so you can write covered calls every week as well as on the monthly cycle.":o.f==="Monthly"?"Options expire on the standard monthly cycle.":"Only a few expirations are listed, mostly quarterly or longer-dated."}</p>
-      <h3>Next expirations</h3><div style="display:flex;flex-wrap:wrap;gap:6px">${ex}</div>
-      ${s.grp==="Option income"?`<p class="note">This fund already sells options inside its portfolio, so its own share price tends to move less and its calls usually carry less premium than the underlying index's.</p>`:""}
-    </section>
-    ${ccSection(s, R)}
-    ${c?`<section style="display:grid;gap:10px"><h3>At-the-money call, about 30 days out</h3>
-      <div class="kv"><div><span>Expiration</span><span>${esc(c.e)} (${c.d} days)</span></div><div><span>Strike</span><span>${money(c.k)}</span></div><div><span>Bid / ask</span><span>${money(c.b)} / ${money(c.a)}</span></div><div><span>Mid premium</span><span>${money(c.m)}</span></div><div><span>Implied volatility</span><span>${pct(c.iv)}</span></div><div><span>Open interest</span><span>${c.oi?.toLocaleString?.()??"–"}</span></div><div><span>Premium / price</span><span>${pct(c.py,2)}</span></div><div><span>Annualized</span><span>${pct(c.ann,1)}</span></div></div></section>`:""}`;
-  }
   if (detailTab === "mgr"){
     const links = [s.web?`<a href="${esc(s.web)}" target="_blank" rel="noopener">Sponsor site</a>`:"",
       `<a href="https://finance.yahoo.com/quote/${esc(s.t)}" target="_blank" rel="noopener">Yahoo Finance</a>`,
@@ -804,24 +754,6 @@ function detailBody(s, R){
     </div>`;
   }
   return "";
-}
-
-function ccSection(s, R){
-  const c = R.cc;
-  if (!c || c.value == null) return `<section style="display:grid;gap:8px"><h3>Covered call estimated return</h3><p class="note">${esc(c?.why || "Not available.")}</p></section>`;
-  const p = c.pick;
-  return `<section style="display:grid;gap:10px"><h3>Covered call estimated return</h3>
-    <div class="vals"><div class="val avg"><span class="k">Estimated annual return</span><span class="v">${pct(c.value,1)}</span><span class="d note">${money(c.income)} a year on ${money(c.mv)} of shares</span></div>
-      <div class="val"><span class="k">Call sold</span><span class="v">${money(p.k)}</span><span class="d note">${num(p.delta,2)} delta · expires ${esc(c.exp)} (${c.dte} days)</span></div></div>
-    <div class="formula">${esc(c.cycle)} cycle: ${c.n} sales a year, 100 shares
-Premium (${R.at.cp==="mid"?"mid":"bid"})  ${money(p.prem)} × 100 = ${money(p.prem*100)} per sale
-Annual income       ${money(p.prem*100)} × ${c.n} = ${money(c.income)}
-Market value        ${money(s.p)} × 100 = ${money(c.mv)}
-Estimated return    ${money(c.income)} ÷ ${money(c.mv)} = ${pct(c.value,1)}</div>
-    <p class="note">Chooses the call whose delta is closest to ${num(c.target,2)}, with delta from Black-Scholes using each strike's implied volatility, a 4% rate and the fund's trailing yield. Assumes the same premium each cycle and that shares are not called away; if they are, the gain up to the strike is ${pct(c.ifCalled,1)} on top of the premium. Option volume on smaller funds can be thin, so check the bid-ask spread.</p>
-    <div class="hist"><table><thead><tr><th class="l">Strike</th><th>Bid</th><th>Ask</th><th>Implied vol</th><th>Delta</th><th>Open interest</th></tr></thead><tbody>
-    ${c.rows.map(x=>`<tr${x===p?` style="background:var(--accent-soft);font-weight:600"`:""}><td class="l num">${money(x.k)}</td><td class="num">${money(x.b)}</td><td class="num">${money(x.a)}</td><td class="num">${pct(x.iv,0)}</td><td class="num">${num(x.delta,2)}</td><td class="num">${x.oi?.toLocaleString?.()??"–"}</td></tr>`).join("")}
-    </tbody></table></div></section>`;
 }
 
 function renderMd(t){
@@ -858,7 +790,6 @@ async function runAnalysis(t){
     distributions:{frequency:s.f, latestRegular:s.reg, forwardYield:R.fy, trailingYield:R.ty, growth12m:R.dg, cuts3y:s.cuts, byYear:s.dby, recent:(s.dh||[]).slice(-12)},
     taxMixUsed:R.mix, afterTaxYield:R.aty, userRates:{federalOrdinary:R.at.fo, qualified:R.at.fc, state:R.at.st, niit:R.at.niit},
     performance:s.pf, beta:s.beta, holdings:s.hold ? {top:s.hold.top, sectors:s.hold.sectors, assets:s.hold.assets} : null,
-    options:{frequency:s.o?.f, coveredCallEstimate: R.cc?.value!=null ? {annualReturn:R.cc.value, strike:R.cc.pick.k, delta:R.cc.pick.delta} : null},
     peersInScreener: FUNDS.filter(x=>x.t!==s.t && (x.ty===s.ty || x.grp===s.grp)).slice(0,6).map(x=>({t:x.t, type:x.ty, fwdYield:RES.get(x.t)?.fy, tr3y:x.pf?.tr3y, er:x.er, prem:x.prem}))};
   const prompt = `You are a fund analyst writing for an experienced individual investor who is a tax and accounting professional. Write an in-depth analysis of ${s.n} (${s.t}), a ${s.st}, using the data below plus your general knowledge of the fund and its sponsor.
 
@@ -932,7 +863,7 @@ async function queueRefresh(tickers){
 $("#refreshAll").addEventListener("click", () => queueRefresh(["ALL"]));
 
 /* ------------------------------------------------------------ settings */
-function applyInputs(A){ $("#inFo").value=A.fo??24; $("#inFc").value=A.fc??15; $("#inSt").value=A.st??0; $("#inNiit").value=A.niit??"no"; $("#inYb").value=A.yb??"fwd"; $("#inAmt").value=A.amt??10000; $("#inD").value=A.cd??0.3; $("#inP").value=A.cp??"bid"; }
+function applyInputs(A){ $("#inFo").value=A.fo??24; $("#inFc").value=A.fc??15; $("#inSt").value=A.st??0; $("#inNiit").value=A.niit??"no"; $("#inYb").value=A.yb??"fwd"; $("#inAmt").value=A.amt??10000; }
 let saveT = null;
 function saveSettings(){
   const payload = {assumptions: APPLIED || readInputs(), overrides: OVR, savedAt: new Date().toISOString()};
