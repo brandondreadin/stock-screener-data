@@ -163,8 +163,8 @@ def perf(h):
         out["mdd3y"] = rnd(float(dd), 4)
     out["since"] = h.index[0].isoformat()
     # month-end series for charts: [YYYY-MM, close, adjusted close]
-    m = h.groupby([(d.year, d.month) for d in h.index]).last()
-    out["monthly"] = [[f"{y}-{mo:02d}", rnd(float(r["Close"]), 3), rnd(float(r["Adj Close"]), 3)] for (y, mo), r in m.iterrows()][-72:]
+    m = h.groupby(pd.Index([f"{d.year}-{d.month:02d}" for d in h.index])).last()
+    out["monthly"] = [[ym, rnd(float(r["Close"]), 3), rnd(float(r["Adj Close"]), 3)] for ym, r in m.iterrows()][-72:]
     return out
 
 
@@ -182,9 +182,9 @@ def nav_series(ticker):
     s.index = [d.date() for d in s.index]
     if (TODAY - s.index[-1]).days > 20:
         return None
-    m = s.groupby([(d.year, d.month) for d in s.index]).last()
+    m = s.groupby(pd.Index([f"{d.year}-{d.month:02d}" for d in s.index])).last()
     return {"latest": rnd(float(s.iloc[-1]), 4), "date": s.index[-1].isoformat(),
-            "daily": s, "monthly": [[f"{y}-{mo:02d}", rnd(float(v), 3)] for (y, mo), v in m.items()][-72:]}
+            "daily": s, "monthly": [[ym, rnd(float(v), 3)] for ym, v in m.items()][-72:]}
 
 
 def holdings(tk):
@@ -331,7 +331,7 @@ def main():
                 results[t] = f.result()
             except Exception as e:
                 traceback.print_exc()
-                results[t] = {"ticker": t, "errors": [str(e)]}
+                results[t] = {"ticker": t, "errors": [f"{type(e).__name__}: {e}"]}
     retry = [t for t, r in results.items() if not (r.get("yahoo") or {}).get("price")]
     if retry:
         print(f"Retrying {len(retry)} after a pause", flush=True)
