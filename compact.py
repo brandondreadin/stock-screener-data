@@ -78,6 +78,8 @@ def compact(s):
         "sum": (y.get("longBusinessSummary") or "")[:1400], "web": y.get("website"), "emp": y.get("fullTimeEmployees"),
         "u": s.get("updated"),
     }
+    if s.get("custom"):
+        rec["c"] = 1
     if s.get("errors"):
         rec["err"] = s["errors"]
     return {k: v for k, v in rec.items() if v not in (None, "", [])}
@@ -89,13 +91,15 @@ def main():
     for f in os.listdir(OUT):
         os.remove(os.path.join(OUT, f))
     stocks = [compact(s) for s in d["stocks"]]
+    missing = [s["t"] for s in stocks if not s.get("p") and s.get("c")]
     stocks = [s for s in stocks if s.get("p")]
     chunks = [stocks[i:i + PER_CHUNK] for i in range(0, len(stocks), PER_CHUNK)]
     for i, c in enumerate(chunks):
         with open(f"{OUT}/chunk_{i:02d}.json", "w") as f:
             json.dump({"stocks": c}, f, separators=(",", ":"))
     with open(f"{OUT}/meta.json", "w") as f:
-        json.dump({"generated": d["generated"], "aaa": d.get("aaaYield"), "count": len(stocks), "chunks": len(chunks)}, f)
+        json.dump({"generated": d["generated"], "aaa": d.get("aaaYield"), "count": len(stocks), "chunks": len(chunks),
+                   "custom": sorted(s["t"] for s in stocks if s.get("c")), "notFound": missing}, f)
     sizes = [os.path.getsize(f"{OUT}/chunk_{i:02d}.json") for i in range(len(chunks))]
     print(f"{len(stocks)} stocks in {len(chunks)} chunks, largest {max(sizes)//1024} KiB")
 

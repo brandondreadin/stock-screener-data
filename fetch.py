@@ -64,6 +64,47 @@ def constituents():
     return out
 
 
+# ---------------------------------------------------------------- watchlist (stocks added outside the S&P 500)
+WATCHLIST = "watchlist.txt"
+YAHOO_TO_GICS_SECTOR = {
+    "Technology": "Information Technology", "Healthcare": "Health Care", "Financial Services": "Financials",
+    "Consumer Cyclical": "Consumer Discretionary", "Consumer Defensive": "Consumer Staples",
+    "Basic Materials": "Materials", "Communication Services": "Communication Services", "Industrials": "Industrials",
+    "Energy": "Energy", "Utilities": "Utilities", "Real Estate": "Real Estate",
+}
+
+
+def read_watchlist():
+    if not os.path.exists(WATCHLIST):
+        return []
+    out = []
+    for line in open(WATCHLIST):
+        t = line.split("#")[0].strip().upper()
+        if t and t not in out:
+            out.append(t)
+    return out
+
+
+def sec_ciks():
+    r = requests.get("https://www.sec.gov/files/company_tickers.json", headers=UA, timeout=30)
+    r.raise_for_status()
+    return {v["ticker"].upper().replace("-", "."): (str(v["cik_str"]).zfill(10), v["title"]) for v in r.json().values()}
+
+
+def custom_entries(tickers):
+    try:
+        ciks = sec_ciks()
+    except Exception as e:
+        print("SEC ticker map failed:", e)
+        ciks = {}
+    out = []
+    for t in tickers:
+        cik, title = ciks.get(t.replace("-", "."), (None, None))
+        out.append({"ticker": t, "name": title or t, "sector": "", "subIndustry": "", "hq": "",
+                    "cik": cik or "", "founded": "", "custom": True})
+    return out
+
+
 # ---------------------------------------------------------------- FRED Aaa
 def aaa_yield():
     try:
@@ -239,7 +280,7 @@ INFO_KEYS = [
     "trailingEps", "forwardEps", "bookValue", "sharesOutstanding", "impliedSharesOutstanding", "revenueGrowth", "earningsGrowth",
     "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "fiftyDayAverage", "twoHundredDayAverage",
     "targetMeanPrice", "targetLowPrice", "targetHighPrice", "recommendationKey", "numberOfAnalystOpinions",
-    "industry", "sector", "fullTimeEmployees", "website", "longBusinessSummary", "exDividendDate",
+    "industry", "sector", "fullTimeEmployees", "longName", "shortName", "city", "state", "country", "website", "longBusinessSummary", "exDividendDate",
 ]
 
 
@@ -348,6 +389,17 @@ def build(c):
         errs.append(f"yahoo: {e}")
         y = {"splits": []}
         rec["yahoo"] = None
+    if c.get("custom") and y:
+        rec["name"] = y.get("longName") or y.get("shortName") or rec["name"]
+        rec["sector"] = YAHOO_TO_GICS_SECTOR.get(y.get("sector") or "", y.get("sector") or "Other")
+        rec["subIndustry"] = y.get("industry") or "Other"
+        rec["hq"] = ", ".join(x for x in (y.get("city"), y.get("state") or y.get("country")) if x)
+    if not c.get("cik"):
+        rec["history"] = None
+        errs.append("sec: no SEC filer found for this ticker (foreign filers and funds have no 10-K data)")
+        rec["errors"] = errs
+        rec["updated"] = dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        return rec
     try:
         rec["history"] = sec_history(c["cik"], y.get("splits", []), y.get("impliedSharesOutstanding") or y.get("sharesOutstanding"))
     except Exception as e:
@@ -371,11 +423,15 @@ def main():
         existing = {s["ticker"]: s for s in prev.get("stocks", [])}
 
     cons = constituents()
+    sp = {c["ticker"] for c in cons}
+    extras = [t for t in read_watchlist() if t not in sp]
+    if extras:
+        cons = cons + custom_entries(extras)
     by_t = {c["ticker"]: c for c in cons}
     targets = [by_t[t] for t in only if t in by_t] if only else cons
     missing = [t for t in only if t not in by_t]
     if missing:
-        print("Not in S&P 500 list:", missing)
+        print("Not in the S&P 500 or watchlist.txt, skipped:", missing)
 
     results = {}
     with ThreadPoolExecutor(max_workers=4) as ex:
@@ -414,6 +470,8 @@ def main():
             merged[c["ticker"]] = results[c["ticker"]]
     if only:
         merged.update(results)
+    # drop anything no longer in the S&P 500 list or the watchlist
+    merged = {t: v for t, v in merged.items() if t in by_t}
 
     payload = {
         "generated": dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),

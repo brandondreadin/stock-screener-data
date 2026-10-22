@@ -91,6 +91,13 @@ tbody tr:hover{background:var(--accent-soft)}
 .pill.g{background:var(--good-soft);color:var(--good)}
 .pill.b{background:var(--bad-soft);color:var(--bad)}
 .empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.addform{display:flex;gap:6px;align-items:center}
+.addform input{width:120px;border:1px solid var(--rule);background:var(--sheet);border-radius:7px;padding:7px 10px;font-family:var(--f-mono);text-transform:uppercase}
+.wl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.84rem}
+.wl .chip{display:inline-flex;align-items:center;gap:8px;padding:4px 6px 4px 10px;border-radius:999px;background:var(--brass-soft);color:var(--ink)}
+.wl .chip.bad{background:var(--bad-soft)}
+.wl .chip button{border:0;background:transparent;cursor:pointer;color:var(--muted);font-size:.78rem;padding:2px 6px;border-radius:999px}
+.wl .chip button:hover{color:var(--ink)}
 
 /* detail sheet */
 .overlay{position:fixed;inset:0;background:rgba(10,18,15,.35);z-index:20}
@@ -152,10 +159,16 @@ tbody tr:hover{background:var(--accent-soft)}
         <span id="aaaShow"></span>
       </div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <form class="addform" id="addForm" autocomplete="off">
+        <label for="addT" class="note" style="margin-right:2px">Add stock</label>
+        <input id="addT" type="text" maxlength="8" placeholder="Ticker">
+        <button class="btn primary" type="submit">Add</button>
+      </form>
       <button class="btn" id="refreshAll" type="button" title="Queue a fresh pull of prices and financials for every stock">Refresh all data</button>
     </div>
   </header>
+  <div class="wl" id="wl" hidden></div>
 
   <section class="assume" aria-label="Assumptions">
     <div class="grid">
@@ -179,6 +192,7 @@ tbody tr:hover{background:var(--accent-soft)}
     <select id="fOpt" aria-label="Options frequency"><option value="">Any options</option><option value="Weekly">Weekly options</option><option value="Monthly">Monthly options</option><option value="Quarterly">Quarterly options</option></select>
     <label class="chk"><input type="checkbox" id="fUnder"> Below average value</label>
     <label class="chk"><input type="checkbox" id="fDiv"> Pays dividend</label>
+    <label class="chk"><input type="checkbox" id="fMine"> Added by me</label>
     <span class="count" id="count"></span>
   </div>
 
@@ -215,6 +229,7 @@ let OVR = {};               // per-stock growth overrides {ticker:{eps,bv,div,fc
 const RES = new Map();      // ticker -> result
 let INDPE = new Map();
 let QUEUE = new Map();
+let WL = new Map();   // watchlist docs: stocks added outside the S&P 500
 let ANALYSES = new Map();
 let sortKey = "upside", sortDir = -1;
 let db = null, sample = null, canWrite = true;
@@ -361,7 +376,7 @@ function calc(s, A){
 
 /* ------------------------------------------------------------ table */
 const COLS = [
-  {k:"t", h:"Stock", l:true, v:s=>s.t, f:s=>`<span class="tk">${esc(s.t)}</span><span class="nm" title="${esc(s.n)}">${esc(s.n)}</span>`},
+  {k:"t", h:"Stock", l:true, v:s=>s.t, f:s=>`<span class="tk">${esc(s.t)}</span>${s.c?` <span class="pill g">Added</span>`:""}<span class="nm" title="${esc(s.n)}">${esc(s.n)}</span>`},
   {k:"sec", h:"Sector / industry", l:true, v:s=>s.sec+" "+s.sub, f:s=>`<span class="nm" style="max-width:190px;color:var(--ink)" title="${esc(s.sec)}">${esc(s.sec)}</span><span class="nm" style="max-width:190px" title="${esc(s.sub)}">${esc(s.sub)}</span>`},
   {k:"ipe", h:"Ind. P/E", v:s=>INDPE.get(s.t)?.pe, f:s=>{ const i = INDPE.get(s.t); return i ? `<span title="${esc(i.basis)}, ${i.n} compan${i.n===1?"y":"ies"}">${num(i.pe,1)}${i.level==="sec"?" <span class=\"pill q\">sector</span>":""}</span>` : `<span class="na">–</span>`; }},
   {k:"p", h:"Price", v:s=>s.p, f:s=>money(s.p)},
@@ -388,8 +403,10 @@ function renderHead(){
 }
 function filtered(){
   const q = $("#q").value.trim().toLowerCase(), sec = $("#fSector").value, ind = $("#fInd").value, of = $("#fOpt").value;
-  const under = $("#fUnder").checked, dv = $("#fDiv").checked;
+  const under = $("#fUnder").checked, dv = $("#fDiv").checked, mine = $("#fMine").checked;
   return STOCKS.filter(s => {
+    if (s.c && WL.get(s.t)?.status === "removed") return false;
+    if (mine && !s.c) return false;
     if (q && !(s.t.toLowerCase().includes(q) || (s.n||"").toLowerCase().includes(q))) return false;
     if (sec && s.sec !== sec) return false;
     if (ind && s.sub !== ind) return false;
@@ -419,7 +436,7 @@ $("#tbody").addEventListener("click", e => {
   const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t);
 });
 $("#tbody").addEventListener("keydown", e => { if (e.key==="Enter"){ const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t); } });
-["#q","#fInd","#fOpt","#fUnder","#fDiv"].forEach(id => $(id).addEventListener("input", renderTable));
+["#q","#fInd","#fOpt","#fUnder","#fDiv","#fMine"].forEach(id => $(id).addEventListener("input", renderTable));
 $("#fSector").addEventListener("input", () => { fillIndustries(); renderTable(); });
 function fillIndustries(){
   const sec = $("#fSector").value, cur = $("#fInd").value;
@@ -511,6 +528,7 @@ function renderDetail(t){
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn small" type="button" id="dRecalc">Recalculate</button>
         <button class="btn small" type="button" id="dRefresh" ${q?"disabled":""}>${q?"Refresh queued":"Refresh data"}</button>
+        ${s.c?`<button class="btn small" type="button" id="dRemove">Remove from screener</button>`:""}
       </div>
     </div>
   </div>
@@ -520,6 +538,11 @@ function renderDetail(t){
   d.querySelectorAll(".tab").forEach(b => b.onclick = () => { detailTab = b.dataset.tab; renderDetail(t); });
   d.querySelector("#dRecalc").onclick = () => recalcOne(t);
   d.querySelector("#dRefresh").onclick = () => queueRefresh([t]);
+  const rm = d.querySelector("#dRemove");
+  if (rm) rm.onclick = () => {
+    if (rm.dataset.armed !== "1"){ rm.dataset.armed = "1"; rm.textContent = `Confirm: remove ${t}`; rm.classList.add("primary"); return; }
+    removeStock(t);
+  };
   const ov = d.querySelector("#ovrSave"); if (ov) ov.onclick = () => saveOverride(t);
   const oc = d.querySelector("#ovrClear"); if (oc) oc.onclick = () => { delete OVR[t]; saveSettings(); recalcOne(t); };
   const ga = d.querySelector("#genAnalysis"); if (ga) ga.onclick = () => runAnalysis(t);
@@ -622,6 +645,7 @@ Present value  = ${money(mu.fut)} ÷ (1 + ${R.at.r}%)^10 = ${money(mu.value)}</d
   }
   if (detailTab === "company"){
     return `<section style="display:grid;gap:10px"><h3>Business</h3><p class="summary">${esc(s.sum||"No description available.")}</p>
+      ${s.c?`<p class="note">You added this stock. Its sector and industry come from Yahoo's classification, since it isn't in the S&amp;P 500's GICS list.${!(s.h||[]).length?" No 10-K history was found at SEC (common for foreign companies and funds), so models that need history are unavailable.":""}</p>`:""}
       <div class="kv"><div><span>Industry (Yahoo)</span><span>${esc(s.ind||"–")}</span></div><div><span>GICS sub-industry</span><span>${esc(s.sub)}</span></div><div><span>Employees</span><span>${s.emp?.toLocaleString?.()??"–"}</span></div><div><span>Founded</span><span>${esc(s.fd||"–")}</span></div></div>
       ${s.web?`<p><a href="${esc(s.web)}" target="_blank" rel="noopener">${esc(s.web.replace(/^https?:\/\//,""))}</a></p>`:""}
       <p><a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${esc(s.cik)}&type=10-K" target="_blank" rel="noopener">SEC filings</a> · <a href="https://finance.yahoo.com/quote/${esc(s.t.replace(".","-"))}" target="_blank" rel="noopener">Yahoo Finance</a></p></section>`;
@@ -692,6 +716,44 @@ ${JSON.stringify(facts)}`;
   }
 }
 
+/* ------------------------------------------------------------ add / remove stocks */
+const TICKER_RE = /^[A-Z][A-Z0-9]{0,5}([.\-][A-Z])?$/;
+$("#addForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const t = $("#addT").value.trim().toUpperCase().replace(/-/g, ".");
+  if (!TICKER_RE.test(t)){ toast("Enter a ticker symbol, like CROX or RY."); return; }
+  const w = WL.get(t);
+  if (BY.has(t) && !(BY.get(t).c && w?.status === "removed")){ toast(`${t} is already in the screener.`); openDetail(t); return; }
+  if (w && w.status === "pending"){ toast(`${t} is already waiting for the next sync.`); return; }
+  if (!db){ toast("Adding stocks needs the data store, which isn't connected."); return; }
+  try{
+    const at = new Date().toISOString();
+    await db.doc("watchlist/" + t).set({ticker:t, status:"pending", addedAt:at});
+    await db.doc("refreshQueue/" + t).set({ticker:t, requestedAt:at, status:"queued"});
+    $("#addT").value = "";
+    toast(`Added ${t}. It appears after the next sync, within about two hours on weekdays.`);
+  } catch(err){ toast("Only editors can add stocks."); }
+});
+async function removeStock(t){
+  try{
+    await db.doc("watchlist/" + t).set({ticker:t, status:"removed", removedAt:new Date().toISOString()});
+    WL.set(t, {ticker:t, status:"removed"});
+    closeDetail(); renderTable(); renderWL();
+    toast(`Removed ${t}.`);
+  } catch(err){ toast("Only editors can remove stocks."); }
+}
+async function dismissWL(t){ try{ await db.doc("watchlist/" + t).delete(); }catch(e){} }
+function renderWL(){
+  const el = $("#wl");
+  const pend = [...WL.values()].filter(w => w.status === "pending" && !BY.has(w.ticker));
+  const bad = [...WL.values()].filter(w => w.status === "not_found");
+  if (!pend.length && !bad.length){ el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.innerHTML = pend.map(w => `<span class="chip">${esc(w.ticker)}: adding at next sync <button type="button" data-cancel="${esc(w.ticker)}" aria-label="Cancel adding ${esc(w.ticker)}">Cancel</button></span>`).join("")
+    + bad.map(w => `<span class="chip bad">${esc(w.ticker)}: no market data found for this ticker <button type="button" data-cancel="${esc(w.ticker)}" aria-label="Dismiss ${esc(w.ticker)}">Dismiss</button></span>`).join("");
+}
+$("#wl").addEventListener("click", e => { const b = e.target.closest("[data-cancel]"); if (b){ const t = b.dataset.cancel; WL.delete(t); renderWL(); dismissWL(t); db?.doc("refreshQueue/" + t).delete().catch(()=>{}); } });
+
 /* ------------------------------------------------------------ refresh queue */
 async function queueRefresh(tickers){
   if (!db){ toast("Refresh requests need the data store, which isn't connected."); return; }
@@ -726,7 +788,7 @@ function ingest(chunks){
   const cur = $("#fSector").value;
   $("#fSector").innerHTML = `<option value="">All sectors</option>` + secs.map(x=>`<option ${x===cur?"selected":""}>${esc(x)}</option>`).join("");
   fillIndustries();
-  recalcAll(true);
+  recalcAll(true); renderWL();
 }
 function showMeta(){
   if (!META) return;
@@ -755,6 +817,7 @@ async function boot(){
     ingest(ch);
   }, () => emptyState("The data store couldn't be read. Reload the page to try again."));
   db.collection("refreshQueue").onSnapshot(qs => { QUEUE = new Map(qs.docs.map(d=>[d.id, d.data()]).filter(([,v])=>v.status==="queued")); if (openTicker) renderDetail(openTicker); }, ()=>{});
+  db.collection("watchlist").onSnapshot(qs => { WL = new Map(qs.docs.map(d=>[d.id, d.data()])); renderWL(); if (STOCKS.length) renderTable(); }, ()=>{});
   db.collection("analyses").onSnapshot(qs => { ANALYSES = new Map(qs.docs.map(d=>[d.id, d.data()])); if (openTicker && detailTab==="analysis") renderDetail(openTicker); }, ()=>{});
 }
 function emptyState(msg){
