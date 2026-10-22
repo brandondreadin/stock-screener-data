@@ -175,6 +175,7 @@ tbody tr:hover{background:var(--accent-soft)}
   <div class="filters">
     <input type="search" id="q" placeholder="Search ticker or company" aria-label="Search ticker or company">
     <select id="fSector" aria-label="Sector"><option value="">All sectors</option></select>
+    <select id="fInd" aria-label="Industry"><option value="">All industries</option></select>
     <select id="fOpt" aria-label="Options frequency"><option value="">Any options</option><option value="Weekly">Weekly options</option><option value="Monthly">Monthly options</option><option value="Quarterly">Quarterly options</option></select>
     <label class="chk"><input type="checkbox" id="fUnder"> Below average value</label>
     <label class="chk"><input type="checkbox" id="fDiv"> Pays dividend</label>
@@ -248,19 +249,30 @@ const clamp = (g, lo, hi) => g == null ? null : Math.min(hi, Math.max(lo, g));
 const fyX = d => { const t = new Date(d+"T00:00:00Z"); return t.getUTCFullYear() + (t.getUTCMonth())/12 + t.getUTCDate()/365; };
 
 function industryPE(){
-  const sub = new Map(), sec = new Map();
+  // Peer P/E average from the most specific group available among S&P 500 companies:
+  // GICS sub-industry, then Yahoo industry, each needing 3+ companies with a usable P/E (0 to 100);
+  // then the same two with 2 companies; then the GICS sector.
+  const groups = {sub:new Map(), ind:new Map(), sec:new Map()};
   for (const s of STOCKS){
     const pe = s.r?.pe;
     if (!(pe > 0 && pe <= 100)) continue;
-    (sub.get(s.sub) || sub.set(s.sub, []).get(s.sub)).push(pe);
-    (sec.get(s.sec) || sec.set(s.sec, []).get(s.sec)).push(pe);
+    for (const [k, key] of [["sub", s.sub], ["ind", s.ind], ["sec", s.sec]]){
+      if (!key) continue;
+      const m = groups[k]; if (!m.has(key)) m.set(key, []); m.get(key).push({t:s.t, pe});
+    }
   }
-  const mean = a => a.reduce((x,y)=>x+y,0)/a.length;
+  const label = {sub:"GICS sub-industry", ind:"industry (Yahoo classification)", sec:"GICS sector"};
   INDPE = new Map();
   for (const s of STOCKS){
-    const a = sub.get(s.sub) || [];
-    if (a.length >= 3) INDPE.set(s.t, {pe: mean(a), n: a.length, basis: s.sub});
-    else { const b = sec.get(s.sec) || []; INDPE.set(s.t, b.length ? {pe: mean(b), n: b.length, basis: s.sec + " sector (fewer than 3 sub-industry peers)"} : null); }
+    const tiers = [["sub",s.sub,3],["ind",s.ind,3],["sub",s.sub,2],["ind",s.ind,2],["sec",s.sec,1]];
+    let hit = null;
+    for (const [k, key, min] of tiers){
+      const a = key && groups[k].get(key);
+      if (a && a.length >= min){ hit = {k, key, a}; break; }
+    }
+    if (!hit){ INDPE.set(s.t, null); continue; }
+    const pe = hit.a.reduce((x,y)=>x+y.pe,0)/hit.a.length;
+    INDPE.set(s.t, {pe, n: hit.a.length, level: hit.k, basis: `${hit.key} ${label[hit.k]}`, peers: hit.a.map(x=>x.t)});
   }
 }
 
@@ -316,7 +328,7 @@ function calc(s, A){
   if (s.eps > 0 && ip && gEps != null){
     const eps10 = s.eps*Math.pow(1+gEps, N);
     const fut = eps10*ip.pe;
-    out.mult = {value: fut/Math.pow(1+r,N), eps:s.eps, eps10, indPE: ip.pe, n: ip.n, basis: ip.basis, fut, today: s.eps*ip.pe, g:gEps};
+    out.mult = {value: fut/Math.pow(1+r,N), eps:s.eps, eps10, indPE: ip.pe, n: ip.n, basis: ip.basis, level: ip.level, peers: ip.peers, fut, today: s.eps*ip.pe, g:gEps};
   } else out.mult = {value:null, why: !(s.eps>0) ? "Trailing EPS is zero or negative." : !ip ? "No industry P/E available." : "Not enough EPS history to estimate growth."};
 
   // 4. Book value + dividends, 10 years out
@@ -350,7 +362,8 @@ function calc(s, A){
 /* ------------------------------------------------------------ table */
 const COLS = [
   {k:"t", h:"Stock", l:true, v:s=>s.t, f:s=>`<span class="tk">${esc(s.t)}</span><span class="nm" title="${esc(s.n)}">${esc(s.n)}</span>`},
-  {k:"sec", h:"Sector", l:true, v:s=>s.sec, f:s=>`<span class="nm" style="max-width:150px">${esc(s.sec)}</span>`},
+  {k:"sec", h:"Sector / industry", l:true, v:s=>s.sec+" "+s.sub, f:s=>`<span class="nm" style="max-width:190px;color:var(--ink)" title="${esc(s.sec)}">${esc(s.sec)}</span><span class="nm" style="max-width:190px" title="${esc(s.sub)}">${esc(s.sub)}</span>`},
+  {k:"ipe", h:"Ind. P/E", v:s=>INDPE.get(s.t)?.pe, f:s=>{ const i = INDPE.get(s.t); return i ? `<span title="${esc(i.basis)}, ${i.n} compan${i.n===1?"y":"ies"}">${num(i.pe,1)}${i.level==="sec"?" <span class=\"pill q\">sector</span>":""}</span>` : `<span class="na">–</span>`; }},
   {k:"p", h:"Price", v:s=>s.p, f:s=>money(s.p)},
   {k:"graham", h:"Graham", v:(s,R)=>R?.graham.value, f:(s,R)=>cell(R?.graham, s.p)},
   {k:"dcf", h:"DCF", v:(s,R)=>R?.dcf.value, f:(s,R)=>cell(R?.dcf, s.p)},
@@ -374,11 +387,12 @@ function renderHead(){
   $("#thead").innerHTML = COLS.map(c => `<th class="${c.l?"l":""}" data-k="${c.k}" ${c.k===sortKey?`aria-sort="${sortDir>0?"ascending":"descending"}"`:""} scope="col">${esc(c.h)}${c.k===sortKey?` <span class="ar">${sortDir>0?"▲":"▼"}</span>`:""}</th>`).join("");
 }
 function filtered(){
-  const q = $("#q").value.trim().toLowerCase(), sec = $("#fSector").value, of = $("#fOpt").value;
+  const q = $("#q").value.trim().toLowerCase(), sec = $("#fSector").value, ind = $("#fInd").value, of = $("#fOpt").value;
   const under = $("#fUnder").checked, dv = $("#fDiv").checked;
   return STOCKS.filter(s => {
     if (q && !(s.t.toLowerCase().includes(q) || (s.n||"").toLowerCase().includes(q))) return false;
     if (sec && s.sec !== sec) return false;
+    if (ind && s.sub !== ind) return false;
     if (of && s.o?.f !== of) return false;
     if (dv && !(s.div > 0)) return false;
     if (under){ const R = RES.get(s.t); if (!(R?.upside > 0)) return false; }
@@ -405,7 +419,14 @@ $("#tbody").addEventListener("click", e => {
   const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t);
 });
 $("#tbody").addEventListener("keydown", e => { if (e.key==="Enter"){ const tr = e.target.closest("tr[data-t]"); if (tr) openDetail(tr.dataset.t); } });
-["#q","#fSector","#fOpt","#fUnder","#fDiv"].forEach(id => $(id).addEventListener("input", renderTable));
+["#q","#fInd","#fOpt","#fUnder","#fDiv"].forEach(id => $(id).addEventListener("input", renderTable));
+$("#fSector").addEventListener("input", () => { fillIndustries(); renderTable(); });
+function fillIndustries(){
+  const sec = $("#fSector").value, cur = $("#fInd").value;
+  const subs = [...new Set(STOCKS.filter(s=>!sec || s.sec===sec).map(s=>s.sub).filter(Boolean))].sort();
+  $("#fInd").innerHTML = `<option value="">All industries</option>` + subs.map(x=>`<option ${x===cur?"selected":""}>${esc(x)}</option>`).join("");
+  if (cur && !subs.includes(cur)) $("#fInd").value = "";
+}
 
 /* ------------------------------------------------------------ recalculation */
 function readInputs(){
@@ -540,7 +561,8 @@ function detailBody(s, R){
         ${mu.value!=null?`<div class="formula">EPS in 10 yrs = ${num(mu.eps)} × (1 + ${pct(mu.g)})^10 = ${num(mu.eps10)}
 Price in 10 yrs = ${num(mu.eps10)} × industry P/E ${num(mu.indPE,1)} = ${money(mu.fut)}
 Present value  = ${money(mu.fut)} ÷ (1 + ${R.at.r}%)^10 = ${money(mu.value)}</div>
-        <p class="note">Industry P/E is the average trailing P/E of ${mu.n} S&amp;P 500 companies in ${esc(mu.basis)} (P/Es above 100 or negative excluded). At today's EPS that multiple implies ${money(mu.today)}.</p>`:`<p class="note">${esc(mu.why)}</p>`}
+        <p class="note">Industry P/E is the average trailing P/E of ${mu.n} S&amp;P 500 compan${mu.n===1?"y":"ies"} in the ${esc(mu.basis)} group${mu.level==="sec"?" (no narrower group had enough peers)":""}; P/Es above 100 or negative are left out. At today's EPS that multiple implies ${money(mu.today)}.</p>
+        <p class="note">Peers: ${mu.peers.map(esc).join(", ")}</p>`:`<p class="note">${esc(mu.why)}</p>`}
       </div></details>
       <details><summary><span>Book value + dividends</span><span class="mono">${money(bk.value)}</span></summary><div class="inner">
         ${bk.value!=null?`<div class="kv"><div><span>Book value / share now</span><span>${money(bk.bv0)}</span></div><div><span>Book value growth</span><span>${pct(bk.gBv)}</span></div><div><span>Book value in 10 yrs</span><span>${money(bk.bv10)}</span></div><div><span>PV of book value</span><span>${money(bk.pvBv)}</span></div><div><span>Dividends, trailing 12 mo</span><span>${money(bk.d0)}</span></div><div><span>Dividend growth</span><span>${pct(bk.gDiv)}</span></div><div><span>PV of 10 yrs of dividends</span><span>${money(bk.pvDiv)}</span></div></div>
@@ -703,6 +725,7 @@ function ingest(chunks){
   const secs = [...new Set(list.map(s=>s.sec).filter(Boolean))].sort();
   const cur = $("#fSector").value;
   $("#fSector").innerHTML = `<option value="">All sectors</option>` + secs.map(x=>`<option ${x===cur?"selected":""}>${esc(x)}</option>`).join("");
+  fillIndustries();
   recalcAll(true);
 }
 function showMeta(){
