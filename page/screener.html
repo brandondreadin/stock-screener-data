@@ -290,9 +290,10 @@ function calc(s, A){
     out.dcf = {value:null, why:"Free cash flow is not a meaningful measure for banks, insurers and other financial firms, so DCF is skipped."};
   } else {
     let f0 = null, src = "";
-    if (s.fcf > 0 && s.sh > 0){ f0 = s.fcf/s.sh; src = "Trailing 12-month free cash flow / shares"; }
+    const lastF = [...H].reverse().find(h => h.fcf != null);
+    if (lastF && lastF.fcf > 0){ f0 = lastF.fcf; src = `Fiscal ${lastF.e.slice(0,4)} free cash flow per share (operating cash flow minus capex, 10-K)`; }
     else { const last3 = H.slice(-3).map(h=>h.fcf).filter(v=>v!=null); const m = last3.length ? last3.reduce((a,b)=>a+b,0)/last3.length : null;
-      if (m > 0){ f0 = m; src = "3-year average free cash flow per share"; } }
+      if (m > 0){ f0 = m; src = "3-year average free cash flow per share (10-K)"; } }
     if (f0 == null) out.dcf = {value:null, why:"Free cash flow is negative or unavailable."};
     else if (r <= tg) out.dcf = {value:null, why:"Desired return must exceed terminal growth."};
     else {
@@ -346,6 +347,7 @@ const COLS = [
   {k:"cc", h:"30d call, ann.", v:s=>s.o?.cs?.ann, f:s=>s.o?.cs?.ann!=null?pct(s.o.cs.ann,1):`<span class="na">–</span>`},
   {k:"act", h:"", nosort:true, f:s=>`<button class="btn small" type="button" data-recalc="${esc(s.t)}" title="Recalculate ${esc(s.t)} with the current assumptions">Recalc</button>`},
 ];
+function fcfLast(s){ const h = [...(s.h||[])].reverse().find(x=>x.fcf!=null); return h ? h.fcf : null; }
 function cell(v, p){ if (v==null || !isFinite(v) || v<=0) return `<span class="na">–</span>`; return `<span class="${v>=p?"up":""}">${money(v)}</span>`; }
 function optPill(f){ if (!f || f==="None") return `<span class="pill">None</span>`; const c={Weekly:"w",Monthly:"m",Quarterly:"q"}[f]||""; return `<span class="pill ${c}">${esc(f)}</span>`; }
 
@@ -538,12 +540,12 @@ Present value  = ${money(mu.fut)} ÷ (1 + ${R.at.r}%)^10 = ${money(mu.value)}</d
     const r = s.r || {};
     const de = r.de != null ? r.de/100 : null;
     const groups = [
-      ["Valuation", [["P/E (trailing)",num(r.pe,1)],["P/E (forward)",num(r.fpe,1)],["PEG",num(r.peg,2)],["Price / book",num(r.pb,2)],["Price / sales",num(r.ps,2)],["EV / EBITDA",num(r.eve,1)],["FCF yield",s.fcf&&s.mc?pct(s.fcf/s.mc,1):"–"],["Earnings yield",s.eps>0&&s.p?pct(s.eps/s.p,1):"–"]]],
+      ["Valuation", [["P/E (trailing)",num(r.pe,1)],["P/E (forward)",num(r.fpe,1)],["PEG",num(r.peg,2)],["Price / book",num(r.pb,2)],["Price / sales",num(r.ps,2)],["EV / EBITDA",num(r.eve,1)],["FCF yield",fcfLast(s)&&s.p?pct(fcfLast(s)/s.p,1):"–"],["Earnings yield",s.eps>0&&s.p?pct(s.eps/s.p,1):"–"]]],
       ["Profitability", [["Gross margin",pct(r.gm)],["Operating margin",pct(r.om)],["Net margin",pct(r.nm)],["Return on equity",pct(r.roe)],["Return on assets",pct(r.roa)]]],
       ["Financial health", [["Debt / equity",de!=null?num(de,2)+"x":"–"],["Current ratio",num(r.cr,2)],["Quick ratio",num(r.qr,2)],["Total cash",big(r.cash)],["Total debt",big(r.debt)]]],
       ["Dividends", [["Dividend (TTM)",money(s.div)],["Yield",s.div>0&&s.p?pct(s.div/s.p,2):"–"],["Payout ratio",pct(r.pay)],["Ex-dividend date",esc(r.exd||"–")]]],
       ["Market", [["Market cap",big(s.mc)],["Beta",num(r.beta,2)],["52-week range",`${money(r.l52)} to ${money(r.h52)}`],["50 / 200-day avg",`${money(r.ma50)} / ${money(r.ma200)}`],["Analyst target",money(r.tgt)],["Analyst view",esc(r.rec||"–")]]],
-      ["Per share", [["EPS (TTM)",money(s.eps)],["EPS (forward)",money(r.feps)],["Book value",money(s.bv)],["FCF",s.fcf&&s.sh?money(s.fcf/s.sh):"–"]]],
+      ["Per share", [["EPS (TTM)",money(s.eps)],["EPS (forward)",money(r.feps)],["Book value",money(s.bv)],["FCF (latest 10-K)",money(fcfLast(s))]]],
     ];
     return groups.map(([h,rows])=>`<section style="display:grid;gap:8px"><h3>${h}</h3><div class="kv">${rows.map(([k,v])=>`<div><span>${k}</span><span>${v}</span></div>`).join("")}</div></section>`).join("");
   }
@@ -617,7 +619,7 @@ async function runAnalysis(t){
   box.innerHTML = `<p class="note">Writing the analysis…</p>`;
   const facts = {
     ticker:s.t, name:s.n, sector:s.sec, subIndustry:s.sub, price:s.p, marketCap:s.mc, description:(s.sum||"").slice(0,1500),
-    ratios:s.r, epsTTM:s.eps, bookValuePerShare:s.bv, dividendTTM:s.div, freeCashFlowTTM:s.fcf,
+    ratios:s.r, epsTTM:s.eps, bookValuePerShare:s.bv, dividendTTM:s.div, freeCashFlowPerShareLatest10K:fcfLast(s),
     history:(s.h||[]).map(h=>({fyEnd:h.e, revenue:h.rev, netIncome:h.ni, eps:h.eps, bvps:h.bv, fcfps:h.fcf, dps:h.dps})),
     valuations:{desiredReturn:R.at.r+"%", graham:R.graham.value, dcf:R.dcf.value, multiples:R.mult.value, industryPE:R.mult.indPE, bookPlusDividends:R.book.value, average:R.avg, growthUsed:R.g},
     options:{frequency:s.o?.f, thirtyDayATMCall:s.o?.cs}
