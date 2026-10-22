@@ -1,0 +1,38 @@
+name: Refresh stock data
+
+on:
+  schedule:
+    - cron: "37 21 * * 1-5"   # weekdays after US market close
+  workflow_dispatch:
+    inputs:
+      tickers:
+        description: "Tickers to refresh (space or comma separated). Leave blank for all S&P 500."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q yfinance pandas requests
+      - run: python fetch.py ${{ github.event.inputs.tickers }}
+      - name: Commit data
+        run: |
+          git config user.name "stock-screener-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/stocks.json
+          git diff --cached --quiet || git commit -m "Data refresh $(date -u +%Y-%m-%dT%H:%MZ) ${{ github.event.inputs.tickers }}"
+          git pull --rebase -q || true
+          git push
