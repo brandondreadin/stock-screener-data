@@ -3,7 +3,7 @@
 Writes build/meta.json and build/chunk_XX.json (each well under the 256 KiB document limit).
 """
 import json, os, sys, datetime as dt
-from fetch import classify_expirations
+from fetch import classify_expirations, fix_shares
 
 SRC = sys.argv[1] if len(sys.argv) > 1 else "data/stocks.json"
 OUT = "build"
@@ -18,9 +18,15 @@ def compact(s):
     y = s.get("yahoo") or {}
     H = s.get("history") or []
     hist = []
+    ref = y.get("impliedSharesOutstanding") or y.get("sharesOutstanding")
     for h in H:
+        bvps, fcfps = h.get("bvps"), h.get("fcfps")
+        if not h.get("sharesApprox"):
+            sh = fix_shares(h.get("sharesOut"), ref) or fix_shares(h.get("dilutedShares"), ref)
+            bvps = h["equity"] / sh if sh and h.get("equity") is not None else None
+            fcfps = h["fcf"] / sh if sh and h.get("fcf") is not None else None
         row = {"e": h["fyEnd"], "rev": h.get("revenue"), "ni": h.get("netIncome"),
-               "eps": r(h.get("eps")), "bv": r(h.get("bvps")), "fcf": r(h.get("fcfps")), "dps": r(h.get("dps"))}
+               "eps": r(h.get("eps")), "bv": r(bvps), "fcf": r(fcfps), "dps": r(h.get("dps"))}
         if h.get("sharesApprox"):
             row["a"] = 1
         hist.append({k: v for k, v in row.items() if v is not None})

@@ -52,6 +52,8 @@ button,input,select{font:inherit;color:inherit}
 .pct{position:relative}
 .pct input{padding-right:24px;font-family:var(--f-mono)}
 .pct::after{content:"%";position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--muted);font-family:var(--f-mono)}
+.pct.x::after{content:"× price"}
+.pct.x input{padding-right:62px}
 .assume .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .assume .hint{color:var(--muted);font-size:.82rem}
 .stale{color:var(--brass);font-weight:600}
@@ -108,6 +110,9 @@ tbody tr:hover{background:var(--accent-soft)}
 .val .v{font-family:var(--f-mono);font-size:1.3rem}
 .val .d{font-size:.8rem}
 .val.avg{border-color:var(--accent)}
+.val.off .v{text-decoration:line-through;color:var(--muted)}
+.xcl{color:var(--muted);text-decoration:line-through}
+.use{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)}
 .calc{background:var(--sheet);border:1px solid var(--rule);border-radius:9px;overflow:hidden}
 .calc details{border-top:1px solid var(--rule-2)}
 .calc details:first-child{border-top:0}
@@ -158,6 +163,7 @@ tbody tr:hover{background:var(--accent-soft)}
       <div class="field"><label for="inTG">Terminal growth (DCF)</label><div class="pct"><input id="inTG" type="number" step="0.25" min="0" max="6" value="2.5"></div></div>
       <div class="field"><label for="inCap">Growth rate cap</label><div class="pct"><input id="inCap" type="number" step="1" min="2" max="50" value="15"></div></div>
       <div class="field"><label for="inY">Graham discount yield (Y)</label><select id="inY"><option value="aaa">AAA corporate bond yield</option><option value="r">Desired return</option></select></div>
+      <div class="field"><label for="inMax">Ignore values above</label><div class="pct x"><input id="inMax" type="number" step="0.5" min="1" max="100" value="5"></div></div>
       <div class="field"><label for="inG">Historical growth measured as</label><select id="inG"><option value="cagr">Compound annual (CAGR)</option><option value="mean">Mean of yearly changes</option></select></div>
     </div>
     <div class="row">
@@ -202,7 +208,7 @@ const THIS_YEAR = new Date().getFullYear();
 let STOCKS = [];            // compact records from the data store
 let BY = new Map();
 let META = null;            // {generated, aaa:{value,date}}
-let SET = {r:10, tg:2.5, cap:15, y:"aaa", g:"cagr"};   // live inputs (percent)
+let SET = {r:10, tg:2.5, cap:15, y:"aaa", g:"cagr", mx:5};   // live inputs (percent)
 let APPLIED = null;         // assumptions used for the last "recalculate all"
 let OVR = {};               // per-stock growth overrides {ticker:{eps,bv,div,fcf}} in percent
 const RES = new Map();      // ticker -> result
@@ -323,7 +329,18 @@ function calc(s, A){
     out.book = {value: pvBv+pvDiv, bv0:s.bv, gBv, bv10, pvBv, d0: s.div||0, gDiv: gd, pvDiv, rows};
   } else out.book = {value:null, why: !(s.bv>0) ? "Book value per share is zero or negative." : "Not enough book value history to estimate growth."};
 
-  const vals = [out.graham, out.dcf, out.mult, out.book].map(m=>m.value).filter(v=>v!=null && isFinite(v) && v>0);
+  // Outlier guard: a model value more than mx times the price is left out of the average,
+  // unless the stock has a manual include/exclude set for that model.
+  const mx = A.mx > 0 ? A.mx : Infinity;
+  for (const k of ["graham","dcf","mult","book"]){
+    const m = out[k], v = m.value, use = o.use?.[k];
+    if (v == null || !isFinite(v) || v <= 0){ m.off = null; continue; }
+    if (use === false) m.off = "manual";
+    else if (use === true) m.off = null;
+    else if (s.p && v > mx*s.p) m.off = "auto";
+    else m.off = null;
+  }
+  const vals = [out.graham, out.dcf, out.mult, out.book].filter(m=>m.value!=null && isFinite(m.value) && m.value>0 && !m.off).map(m=>m.value);
   out.avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
   out.n = vals.length;
   out.upside = out.avg && s.p ? out.avg/s.p - 1 : null;
@@ -335,10 +352,10 @@ const COLS = [
   {k:"t", h:"Stock", l:true, v:s=>s.t, f:s=>`<span class="tk">${esc(s.t)}</span><span class="nm" title="${esc(s.n)}">${esc(s.n)}</span>`},
   {k:"sec", h:"Sector", l:true, v:s=>s.sec, f:s=>`<span class="nm" style="max-width:150px">${esc(s.sec)}</span>`},
   {k:"p", h:"Price", v:s=>s.p, f:s=>money(s.p)},
-  {k:"graham", h:"Graham", v:(s,R)=>R?.graham.value, f:(s,R)=>cell(R?.graham.value, s.p)},
-  {k:"dcf", h:"DCF", v:(s,R)=>R?.dcf.value, f:(s,R)=>cell(R?.dcf.value, s.p)},
-  {k:"mult", h:"Multiples", v:(s,R)=>R?.mult.value, f:(s,R)=>cell(R?.mult.value, s.p)},
-  {k:"book", h:"Book + Div", v:(s,R)=>R?.book.value, f:(s,R)=>cell(R?.book.value, s.p)},
+  {k:"graham", h:"Graham", v:(s,R)=>R?.graham.value, f:(s,R)=>cell(R?.graham, s.p)},
+  {k:"dcf", h:"DCF", v:(s,R)=>R?.dcf.value, f:(s,R)=>cell(R?.dcf, s.p)},
+  {k:"mult", h:"Multiples", v:(s,R)=>R?.mult.value, f:(s,R)=>cell(R?.mult, s.p)},
+  {k:"book", h:"Book + Div", v:(s,R)=>R?.book.value, f:(s,R)=>cell(R?.book, s.p)},
   {k:"avg", h:"Avg value", v:(s,R)=>R?.avg, f:(s,R)=>R?.avg ? `<b>${money(R.avg)}</b>` : `<span class="na">–</span>`},
   {k:"upside", h:"vs price", v:(s,R)=>R?.upside, f:(s,R)=>R?.upside==null?`<span class="na">–</span>`:`<span class="${R.upside>=0?"up":"down"}">${R.upside>=0?"+":""}${pct(R.upside,0)}</span>`},
   {k:"pe", h:"P/E", v:s=>s.r?.pe, f:s=>num(s.r?.pe,1)},
@@ -348,7 +365,9 @@ const COLS = [
   {k:"act", h:"", nosort:true, f:s=>`<button class="btn small" type="button" data-recalc="${esc(s.t)}" title="Recalculate ${esc(s.t)} with the current assumptions">Recalc</button>`},
 ];
 function fcfLast(s){ const h = [...(s.h||[])].reverse().find(x=>x.fcf!=null); return h ? h.fcf : null; }
-function cell(v, p){ if (v==null || !isFinite(v) || v<=0) return `<span class="na">–</span>`; return `<span class="${v>=p?"up":""}">${money(v)}</span>`; }
+function cell(m, p){ const v = m?.value; if (v==null || !isFinite(v) || v<=0) return `<span class="na">–</span>`;
+  if (m.off) return `<span class="xcl" title="${m.off==="auto"?"More than the outlier limit times the price; left out of the average":"Left out of the average for this stock"}">${money(v)}</span>`;
+  return `<span class="${v>=p?"up":""}">${money(v)}</span>`; }
 function optPill(f){ if (!f || f==="None") return `<span class="pill">None</span>`; const c={Weekly:"w",Monthly:"m",Quarterly:"q"}[f]||""; return `<span class="pill ${c}">${esc(f)}</span>`; }
 
 function renderHead(){
@@ -391,9 +410,9 @@ $("#tbody").addEventListener("keydown", e => { if (e.key==="Enter"){ const tr = 
 /* ------------------------------------------------------------ recalculation */
 function readInputs(){
   const f = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) ? v : d; };
-  return {r: f("#inR",10), tg: f("#inTG",2.5), cap: f("#inCap",15), y: $("#inY").value, g: $("#inG").value};
+  return {r: f("#inR",10), tg: f("#inTG",2.5), cap: f("#inCap",15), y: $("#inY").value, g: $("#inG").value, mx: f("#inMax",5)};
 }
-function sameA(a,b){ return a && b && a.r===b.r && a.tg===b.tg && a.cap===b.cap && a.y===b.y && a.g===b.g; }
+function sameA(a,b){ return a && b && a.r===b.r && a.tg===b.tg && a.cap===b.cap && a.y===b.y && a.g===b.g && a.mx===b.mx; }
 function updateHint(){
   const cur = readInputs();
   const yTxt = cur.y==="aaa" ? `Graham uses the AAA yield${META?.aaa?` (${META.aaa.value.toFixed(2)}%)`:""}` : "Graham uses the desired return as Y";
@@ -415,7 +434,7 @@ function recalcOne(t){
   toast(`Recalculated ${t} at a ${A.r}% desired return`);
 }
 $("#recalcAll").addEventListener("click", () => recalcAll(false));
-["#inR","#inTG","#inCap","#inY","#inG"].forEach(id => $(id).addEventListener("input", updateHint));
+["#inR","#inTG","#inCap","#inY","#inG","#inMax"].forEach(id => $(id).addEventListener("input", updateHint));
 
 /* ------------------------------------------------------------ detail */
 function openDetail(t){
@@ -483,12 +502,19 @@ function renderDetail(t){
   const ov = d.querySelector("#ovrSave"); if (ov) ov.onclick = () => saveOverride(t);
   const oc = d.querySelector("#ovrClear"); if (oc) oc.onclick = () => { delete OVR[t]; saveSettings(); recalcOne(t); };
   const ga = d.querySelector("#genAnalysis"); if (ga) ga.onclick = () => runAnalysis(t);
+  d.querySelectorAll("[data-use]").forEach(cb => cb.onchange = () => {
+    const k = cb.dataset.use, o = OVR[t] || (OVR[t] = {}); o.use = o.use || {};
+    o.use[k] = cb.checked;
+    saveSettings(); recalcOne(t);
+  });
 }
 
-function valCard(k, m, p){
-  const v = m.value;
-  return `<div class="val"><span class="k">${k}</span><span class="v">${v!=null&&v>0?money(v):"–"}</span>
-    <span class="d">${v!=null&&v>0&&p?`<span class="${v>=p?"up":"down"}">${v>=p?"+":""}${pct(v/p-1,0)} vs price</span>`:`<span class="note">${esc(m.why||"Not available")}</span>`}</span></div>`;
+function valCard(k, m, p, key, mx){
+  const v = m.value, ok = v!=null && isFinite(v) && v>0;
+  const off = ok && m.off;
+  return `<div class="val${off?" off":""}"><span class="k">${k}</span><span class="v">${ok?money(v):"–"}</span>
+    <span class="d">${ok&&p?(off?`<span class="note">${m.off==="auto"?`Over ${mx}× price, left out of the average`:"Left out of the average"}</span>`:`<span class="${v>=p?"up":"down"}">${v>=p?"+":""}${pct(v/p-1,0)} vs price</span>`):`<span class="note">${esc(m.why||"Not available")}</span>`}</span>
+    ${ok?`<label class="use"><input type="checkbox" data-use="${key}" ${off?"":"checked"}> Use in average</label>`:""}</div>`;
 }
 
 function detailBody(s, R){
@@ -498,7 +524,7 @@ function detailBody(s, R){
     const o = OVR[s.t] || {};
     return `
     <div class="vals">
-      ${valCard("Graham (revised)", gr, s.p)}${valCard("Discounted cash flow", dc, s.p)}${valCard("Industry multiples", mu, s.p)}${valCard("Book + dividends", bk, s.p)}
+      ${valCard("Graham (revised)", gr, s.p, "graham", R.at.mx)}${valCard("Discounted cash flow", dc, s.p, "dcf", R.at.mx)}${valCard("Industry multiples", mu, s.p, "mult", R.at.mx)}${valCard("Book + dividends", bk, s.p, "book", R.at.mx)}
       <div class="val avg"><span class="k">Average of ${R.n} model${R.n===1?"":"s"}</span><span class="v">${money(R.avg)}</span><span class="d">${R.upside!=null?`<span class="${R.upside>=0?"up":"down"}">${R.upside>=0?"+":""}${pct(R.upside,0)} vs ${money(s.p)}</span>`:""}</span></div>
     </div>
     <div class="calc">
@@ -529,7 +555,7 @@ Present value  = ${money(mu.fut)} ÷ (1 + ${R.at.r}%)^10 = ${money(mu.value)}</d
         <div><span>Dividends, historical</span><span>${pct(g.divHist)}</span></div><div><span>Dividends, used</span><span>${pct(g.div)}</span></div>
         <div><span>Free cash flow, historical</span><span>${pct(g.fcfHist)}</span></div><div><span>Free cash flow, used</span><span>${pct(g.fcf)}</span></div>
       </div>
-      <p class="note">Override any growth rate for this stock, then save to recalculate it. Overrides stay until cleared.</p>
+      <p class="note">Override any growth rate for this stock, then save to recalculate it. Overrides and the "Use in average" choices above stay until cleared.</p>
       <div class="ovr">
         ${[["eps","EPS growth"],["bv","Book value growth"],["div","Dividend growth"],["fcf","FCF growth"]].map(([k,l])=>`<div class="field"><label for="ov_${k}">${l}</label><div class="pct"><input id="ov_${k}" type="number" step="0.5" placeholder="auto" value="${o[k]??""}"></div></div>`).join("")}
         <div style="display:flex;gap:6px"><button class="btn small primary" type="button" id="ovrSave">Save and recalculate</button>${OVR[s.t]?`<button class="btn small" type="button" id="ovrClear">Clear</button>`:""}</div>
@@ -607,6 +633,7 @@ function renderMd(t){
 function saveOverride(t){
   const o = {};
   for (const k of ["eps","bv","div","fcf"]){ const v = parseFloat($("#ov_"+k).value); if (isFinite(v)) o[k] = v; }
+  if (OVR[t]?.use) o.use = OVR[t].use;
   if (Object.keys(o).length) OVR[t] = o; else delete OVR[t];
   saveSettings(); recalcOne(t);
 }
@@ -657,7 +684,7 @@ async function queueRefresh(tickers){
 $("#refreshAll").addEventListener("click", () => queueRefresh(["ALL"]));
 
 /* ------------------------------------------------------------ settings */
-function applyInputs(A){ $("#inR").value=A.r; $("#inTG").value=A.tg; $("#inCap").value=A.cap; $("#inY").value=A.y; $("#inG").value=A.g; }
+function applyInputs(A){ $("#inR").value=A.r; $("#inTG").value=A.tg; $("#inCap").value=A.cap; $("#inY").value=A.y; $("#inG").value=A.g; $("#inMax").value=A.mx ?? 5; }
 let saveT = null;
 function saveSettings(){
   const payload = {assumptions: APPLIED || readInputs(), overrides: OVR, savedAt: new Date().toISOString()};

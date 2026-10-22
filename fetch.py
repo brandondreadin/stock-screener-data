@@ -147,6 +147,19 @@ def split_factor_after(splits, filed):
     return f
 
 
+def fix_shares(v, ref):
+    """Some filers tag share counts in thousands or millions. Rescale when that brings the count in line
+    with today's share count; drop counts that can't be reconciled."""
+    if not v or v <= 0:
+        return None
+    if not ref:
+        return v
+    for scale in (1, 1e3, 1e6):
+        if 0.2 <= v * scale / ref <= 5:
+            return v * scale
+    return None
+
+
 PREDECESSOR_CIK = {"0002115436": "0000034088"}  # ExxonMobil holding company -> Exxon Mobil Corp
 
 
@@ -195,7 +208,9 @@ def _sec_history(cik, splits, fallback_shares=None):
         row["sharesOut"] = v[0] * split_factor_after(splits, v[1]) if v else None
         v = inst["equity"].get(end)
         row["equity"] = v[0] if v else None
-        sh = row["sharesOut"] or row["dilutedShares"]
+        sh = fix_shares(row["sharesOut"], fallback_shares) or fix_shares(row["dilutedShares"], fallback_shares)
+        row["sharesOut"] = fix_shares(row["sharesOut"], fallback_shares)
+        row["dilutedShares"] = fix_shares(row["dilutedShares"], fallback_shares)
         if not sh and fallback_shares:
             # No share counts in XBRL (e.g. multi-class filers): approximate with today's share count
             sh = fallback_shares
