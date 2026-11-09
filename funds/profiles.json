@@ -624,5 +624,138 @@
   "tax": "Mostly return of capital and short-term gains.",
   "opt": "Synthetic long plus short calls on MSTR",
   "lev": "None, but single-stock risk is very high"
+ },
+ "AVUV": {
+  "name": "Avantis U.S. Small Cap Value ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. small cap value",
+  "style": "Small Value",
+  "sponsor": "Avantis Investors (American Century Investments)",
+  "incept": "2019-09-24",
+  "bench": "Russell 2000 Value Index",
+  "mgr": "Avantis Investors is the systematic investing arm of American Century, founded by former Dimensional Fund Advisors executives. Portfolio managers are Eduardo Repetto, Mitchell Firestein, Ted Randall and Daniel Ong (all since 2019), joined by Matthew Dubin in 2024.",
+  "strat": "Actively managed, rules-based portfolio of U.S. small companies that screen as cheap on book value and profitable on cash flow. Holds several hundred names, trades with patience to keep costs low and pays dividends quarterly.",
+  "tax": "Mostly qualified dividends with a small share of nonqualified income; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.9,
+   "ord": 0.1
+  }
+ },
+ "SCHD": {
+  "name": "Schwab U.S. Dividend Equity ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. dividend",
+  "style": "Large Value",
+  "sponsor": "Schwab Asset Management",
+  "incept": "2011-10-20",
+  "bench": "Dow Jones U.S. Dividend 100 Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. The portfolio management team has included Ferian Juwono (since launch), Christopher Bliss, Sabya Sinha and Jeremy Brown.",
+  "strat": "Tracks an index of about 100 U.S. stocks with at least 10 years of consecutive dividends, chosen on cash flow to debt, return on equity, dividend yield and five-year dividend growth. Rebalanced annually and pays quarterly.",
+  "tax": "Almost entirely qualified dividends; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.98,
+   "ord": 0.02
+  }
+ },
+ "SCHY": {
+  "name": "Schwab International Dividend Equity ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Foreign dividend",
+  "style": "Large Value (foreign)",
+  "sponsor": "Schwab Asset Management",
+  "incept": "2021-04-29",
+  "bench": "Dow Jones International Dividend 100 Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. Portfolio managers are Christopher Bliss, Chuck Craig, Jane Qin and David Rios, all on the fund since launch.",
+  "strat": "Applies the same screens as SCHD to developed and emerging markets outside the U.S.: about 100 stocks with a 10-year dividend record, ranked on cash flow to debt, return on equity, yield and dividend growth. Pays quarterly.",
+  "tax": "Mostly qualified foreign dividends with some nonqualified income; foreign tax withheld may be creditable.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.8,
+   "ord": 0.2
+  }
+ },
+ "SPDW": {
+  "name": "SPDR Portfolio Developed World ex-US ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Foreign developed",
+  "style": "Large Blend (foreign)",
+  "sponsor": "State Street Investment Management (SPDR)",
+  "incept": "2007-04-20",
+  "bench": "S&P Developed Ex-U.S. BMI Index",
+  "mgr": "Managed by SSGA Funds Management, part of State Street, through its Systematic Equity Beta team rather than named individual portfolio managers.",
+  "strat": "Low-cost index fund holding large, mid and small companies in developed markets outside the U.S., sampled from the S&P Developed Ex-U.S. BMI. Distributes semiannually.",
+  "tax": "Mostly qualified foreign dividends with some nonqualified income; foreign tax withheld may be creditable.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.75,
+   "ord": 0.25
+  }
+ },
+ "SPYM": {
+  "name": "State Street SPDR Portfolio S&P 500 ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. large cap core",
+  "style": "Large Blend",
+  "sponsor": "State Street Investment Management (SPDR)",
+  "incept": "2005-11-08",
+  "bench": "S&P 500 Index",
+  "mgr": "Managed by SSGA Funds Management, part of State Street, through its Systematic Equity Beta team rather than named individual portfolio managers. Traded as SPLG until October 31, 2025.",
+  "strat": "Full-replication S&P 500 index fund in State Street's low-cost Portfolio lineup, priced well below SPY. Has tracked the S&P 500 since January 2020 and pays dividends quarterly.",
+  "tax": "Almost entirely qualified dividends; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.95,
+   "ord": 0.05
+  }
+ },
+ "VSS": {
+  "name": "Vanguard FTSE All-World ex-US Small-Cap ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Foreign small cap",
+  "style": "Small Blend (foreign)",
+  "sponsor": "Vanguard",
+  "incept": "2009-04-02",
+  "bench": "FTSE Global Small Cap ex US Index",
+  "mgr": "Run by Vanguard's Equity Index Group. Portfolio managers are Jeffrey D. Miller (since 2015), Michael Perre (since 2016) and Nicole Brubaker (since 2025).",
+  "strat": "Index fund holding several thousand small companies across developed and emerging markets outside the U.S. Pays dividends quarterly.",
+  "tax": "Mix of qualified and nonqualified foreign dividends; foreign tax withheld may be creditable.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.6,
+   "ord": 0.4
+  }
+ },
+ "VWO": {
+  "name": "Vanguard FTSE Emerging Markets ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Emerging markets",
+  "style": "Large Blend (emerging)",
+  "sponsor": "Vanguard",
+  "incept": "2005-03-04",
+  "bench": "FTSE Emerging Markets All Cap China A Inclusion Index",
+  "mgr": "Run by Vanguard's Equity Index Group. Portfolio managers are Michael Perre (since 2008), Jeffrey D. Miller (since 2016) and John Kraynak (since 2025).",
+  "strat": "Index fund holding large, mid and small companies in emerging markets including China A-shares, with China, India and Taiwan the largest weights. Pays dividends quarterly.",
+  "tax": "Mix of qualified and nonqualified foreign dividends, since some countries lack a qualifying U.S. tax treaty; foreign tax withheld may be creditable.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.55,
+   "ord": 0.45
+  }
  }
 }
