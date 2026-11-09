@@ -757,5 +757,351 @@
    "qual": 0.55,
    "ord": 0.45
   }
+ },
+ "VOO": {
+  "name": "Vanguard S&P 500 ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. large cap core",
+  "style": "Large Blend",
+  "sponsor": "Vanguard",
+  "incept": "2010-09-07",
+  "bench": "S&P 500 Index",
+  "mgr": "Run by Vanguard's Equity Index Group through Vanguard Capital Management. Portfolio managers are Michelle Louie (since 2017), Nick Birkett (since 2023) and Aurélie Denis (since 2025).",
+  "strat": "Full-replication S&P 500 index fund and the ETF share class of Vanguard 500 Index Fund, one of the cheapest ways to own the U.S. large cap market. Pays dividends quarterly.",
+  "tax": "Almost entirely qualified dividends; Vanguard's share class structure has kept capital gain distributions rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.95,
+   "ord": 0.05
+  }
+ },
+ "VTI": {
+  "name": "Vanguard Morningstar Total Stock Market ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. total market",
+  "style": "Large Blend",
+  "sponsor": "Vanguard",
+  "incept": "2001-05-24",
+  "bench": "Morningstar US Total Market Index",
+  "mgr": "Run by Vanguard's Equity Index Group through Vanguard Capital Management. Portfolio managers are Walter Nejman (since 2016), Michelle Louie (since 2023) and Nick Birkett (since 2025). Renamed from Vanguard Total Stock Market ETF on July 30, 2026, when its CRSP benchmark was rebranded as a Morningstar index with no change in strategy.",
+  "strat": "Index fund holding nearly every U.S. listed stock across large, mid, small and micro caps, weighted by market value, with large caps dominating. Pays dividends quarterly.",
+  "tax": "Almost entirely qualified dividends with a small nonqualified share from REITs and other holdings; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.93,
+   "ord": 0.07
+  }
+ },
+ "VXUS": {
+  "name": "Vanguard Total International Stock ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Total international",
+  "style": "Large Blend (foreign)",
+  "sponsor": "Vanguard",
+  "incept": "2011-01-26",
+  "bench": "FTSE Global All Cap ex US Index",
+  "mgr": "Run by Vanguard's Equity Index Group through Vanguard Capital Management. Portfolio managers are Michael Perre (since 2008), Christine D. Franquin (since 2017) and Jeffrey D. Miller (since 2025).",
+  "strat": "Index fund holding about 8,000 large, mid and small companies in developed and emerging markets outside the U.S., with emerging markets around a quarter of assets. Pays dividends quarterly.",
+  "tax": "Mostly qualified foreign dividends with a meaningful nonqualified share from countries without a qualifying U.S. tax treaty; foreign tax withheld may be creditable.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.7,
+   "ord": 0.3
+  }
+ },
+ "VGT": {
+  "name": "Vanguard Information Technology ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Technology",
+  "style": "Large Growth",
+  "sponsor": "Vanguard",
+  "incept": "2004-01-26",
+  "bench": "MSCI US Investable Market Information Technology 25/50 Index",
+  "mgr": "Run by Vanguard's Equity Index Group through Vanguard Capital Management. Portfolio managers are Kenny Narzikul and Jena Stenger (both since 2025).",
+  "strat": "Index fund holding U.S. information technology stocks of all sizes, with 25/50 capping rules that limit but do not remove heavy weights in the largest names such as Nvidia, Apple and Microsoft. Pays dividends quarterly.",
+  "tax": "Almost entirely qualified dividends from a low yield; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.95,
+   "ord": 0.05
+  }
+ },
+ "QQQ": {
+  "name": "Invesco QQQ Trust, Series 1",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. large cap growth",
+  "style": "Large Growth",
+  "sponsor": "Invesco",
+  "incept": "1999-03-10",
+  "bench": "Nasdaq-100 Index",
+  "mgr": "Advised by Invesco Capital Management since the fund converted from a unit investment trust to an open-end ETF on December 19, 2025. Portfolio managers are Peter Hubbard, Michael Jeanette and Pratik Doshi (all since December 2025); Tony Seisser left the team effective July 1, 2026.",
+  "strat": "Tracks the Nasdaq-100, the 100 largest non-financial companies listed on Nasdaq, weighted by modified market value and dominated by large technology and communication names. Pays dividends quarterly, with any capital gains annually.",
+  "tax": "Almost entirely qualified dividends from a low yield; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.97,
+   "ord": 0.03
+  }
+ },
+ "SGOV": {
+  "name": "iShares 0-3 Month Treasury Bond ETF",
+  "struct": "ETF",
+  "grp": "Credit",
+  "type": "Treasury bills",
+  "style": "High quality, short duration (fixed income)",
+  "sponsor": "BlackRock (iShares)",
+  "incept": "2020-05-26",
+  "bench": "ICE 0-3 Month US Treasury Securities Index",
+  "mgr": "Managed by BlackRock Fund Advisors, the iShares arm of BlackRock. Portfolio managers are James Mauro (since 2020), Jonathan Graves and Marcus Tom (both since 2025).",
+  "strat": "Holds U.S. Treasury bills and other Treasuries maturing in three months or less, giving a cash-like yield with very little interest rate or credit risk. Distributes monthly.",
+  "tax": "Interest is taxed as ordinary income, but because it comes from U.S. Treasuries it is usually exempt from state and local income tax.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "ord": 1.0
+  }
+ },
+ "SCHB": {
+  "name": "Schwab U.S. Broad Market ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. total market",
+  "style": "Large Blend",
+  "sponsor": "Schwab Asset Management",
+  "incept": "2009-11-03",
+  "bench": "Dow Jones U.S. Broad Stock Market Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. Portfolio managers are Ferian Juwono (since 2010), Christopher Bliss (since 2017), Jeremy Brown (since 2018) and Agnes Zau (since 2022).",
+  "strat": "Low-cost index fund holding roughly the 2,500 largest U.S. stocks across large, mid and small caps, covering most of the investable U.S. market. Did a 3-for-1 share split in October 2024 and pays dividends quarterly.",
+  "tax": "Almost entirely qualified dividends; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.95,
+   "ord": 0.05
+  }
+ },
+ "SCHE": {
+  "name": "Schwab Emerging Markets Equity ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Emerging markets",
+  "style": "Large Blend (emerging)",
+  "sponsor": "Schwab Asset Management",
+  "incept": "2010-01-14",
+  "bench": "FTSE Emerging Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. Portfolio managers are Christopher Bliss (since 2017), David Rios (since 2017), Joselle Duncan (since 2023) and Mariela Jobson (since 2024).",
+  "strat": "Index fund holding large and mid-sized companies in emerging markets including China A-shares, with China, Taiwan and India the largest weights. Expense ratio was cut to 0.06% in June 2026 and it distributes semiannually.",
+  "tax": "Mix of qualified and nonqualified foreign dividends, since some countries lack a qualifying U.S. tax treaty; foreign tax withheld may be creditable.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.55,
+   "ord": 0.45
+  }
+ },
+ "SCHF": {
+  "name": "Schwab International Equity ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Foreign developed",
+  "style": "Large Blend (foreign)",
+  "sponsor": "Schwab Asset Management",
+  "incept": "2009-11-03",
+  "bench": "FTSE Developed ex US Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. Portfolio managers are Christopher Bliss (since 2017), David Rios (since 2017), Joselle Duncan (since 2023) and Mariela Jobson (since 2024).",
+  "strat": "Low-cost index fund holding large and mid-sized companies in developed markets outside the U.S., including Canada and South Korea. Did a 2-for-1 share split in October 2024 and distributes semiannually.",
+  "tax": "Mostly qualified foreign dividends with some nonqualified income; foreign tax withheld may be creditable.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.8,
+   "ord": 0.2
+  }
+ },
+ "SCHG": {
+  "name": "Schwab U.S. Large-Cap Growth ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. large cap growth",
+  "style": "Large Growth",
+  "sponsor": "Schwab Asset Management",
+  "incept": "2009-12-11",
+  "bench": "Dow Jones U.S. Large-Cap Growth Total Stock Market Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. Portfolio managers are Ferian Juwono (since 2010), Christopher Bliss (since 2017), Jeremy Brown (since 2018) and Agnes Zau (since 2022).",
+  "strat": "Low-cost index fund holding the growth half of U.S. large caps, chosen on factors such as projected and historical earnings growth and price ratios, so it is heavy in big technology names. Did a 4-for-1 share split in October 2024 and pays dividends quarterly.",
+  "tax": "Almost entirely qualified dividends on a small yield; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.95,
+   "ord": 0.05
+  }
+ },
+ "SCHH": {
+  "name": "Schwab U.S. REIT ETF",
+  "struct": "ETF",
+  "grp": "Real assets",
+  "type": "Real estate",
+  "style": "Mid Blend",
+  "sponsor": "Schwab Asset Management",
+  "incept": "2011-01-13",
+  "bench": "Dow Jones Equity All REIT Capped Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. Portfolio managers are Ferian Juwono (since 2011), Christopher Bliss (since 2017), Jeremy Brown (since 2019) and Agnes Zau (since 2023).",
+  "strat": "Low-cost index fund holding U.S. equity REITs across property types, including towers, data centers, industrial and residential, with caps on the largest weights. Excludes mortgage REITs and pays dividends quarterly.",
+  "tax": "Mostly nonqualified REIT dividends eligible for the Section 199A deduction, with some return of capital and capital gains.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "reit": 0.75,
+   "roc": 0.15,
+   "ltcg": 0.05,
+   "ord": 0.05
+  }
+ },
+ "SCHZ": {
+  "name": "Schwab U.S. Aggregate Bond ETF",
+  "struct": "ETF",
+  "grp": "Credit",
+  "type": "U.S. aggregate bond",
+  "style": "High quality, medium duration (fixed income)",
+  "sponsor": "Schwab Asset Management",
+  "incept": "2011-07-14",
+  "bench": "Bloomberg US Aggregate Bond Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. Portfolio managers are Matthew Hastings, Steven Hung and Alfonso Portillo, Jr., all on the fund since 2011.",
+  "strat": "Samples the investment-grade U.S. bond market, holding Treasuries, agency mortgage-backed securities and corporate bonds, with an effective duration of about 6 years. Pays monthly.",
+  "tax": "Almost entirely nonqualified interest income taxed as ordinary income, with part of the Treasury share possibly exempt from state tax.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "ord": 1.0
+  }
+ },
+ "FDVV": {
+  "name": "Fidelity High Dividend ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "U.S. dividend",
+  "style": "Large Value",
+  "sponsor": "Fidelity Investments",
+  "incept": "2016-09-12",
+  "bench": "Fidelity High Dividend Index",
+  "mgr": "Advised by Fidelity Management & Research and run day to day by index managers at Geode Capital Management, Fidelity's longtime index sub-adviser. Portfolio managers are Louis Bottari, Peter Matthew and Robert Regan (all since 2016), with Navid Sohrabi and Payal Gupta (since 2019).",
+  "strat": "Tracks a Fidelity index of large and mid-size U.S. companies expected to keep paying and growing high dividends, screened on yield, payout ratio and dividend growth with sector weights tied to the broader market. Pays dividends quarterly.",
+  "tax": "Mostly qualified dividends, with a smaller nonqualified share from REIT holdings; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.85,
+   "reit": 0.07,
+   "ord": 0.08
+  }
+ },
+ "FTEC": {
+  "name": "Fidelity MSCI Information Technology Index ETF",
+  "struct": "ETF",
+  "grp": "Equity",
+  "type": "Technology",
+  "style": "Large Growth",
+  "sponsor": "Fidelity Investments",
+  "incept": "2013-10-21",
+  "bench": "MSCI USA IMI Information Technology 25/50 Index",
+  "mgr": "Advised by Fidelity Management & Research and sub-advised by BlackRock Fund Advisors, whose index team runs the portfolio. Portfolio managers are Jennifer Hsui (since 2013), Peter Sietsema (since 2023), and Matt Waldron and Steven White (both since 2025).",
+  "strat": "Low-cost index fund holding U.S. information technology stocks of all sizes, with 25/50 capping rules that limit how much the largest names such as Nvidia, Apple and Microsoft can weigh. Pays small dividends quarterly.",
+  "tax": "Almost entirely qualified dividends on a low yield; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.95,
+   "ord": 0.05
+  }
+ },
+ "FXAIX": {
+  "name": "Fidelity 500 Index Fund",
+  "struct": "Mutual fund",
+  "grp": "Equity",
+  "type": "U.S. large cap core",
+  "style": "Large Blend",
+  "sponsor": "Fidelity Investments",
+  "incept": "2011-05-04",
+  "bench": "S&P 500 Index",
+  "mgr": "Advised by Fidelity Management & Research and sub-advised by Geode Capital Management, which runs most of Fidelity's index funds. Portfolio managers are Louis Bottari, Peter Matthew, Robert Regan, Payal Gupta and Navid Sohrabi.",
+  "strat": "Full-replication S&P 500 index fund and one of the cheapest at about 0.015% a year; the fund dates to 1988 and this share class to 2011. No minimum investment, bought and sold at end-of-day NAV, and pays dividends quarterly.",
+  "tax": "Almost entirely qualified dividends; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.95,
+   "ord": 0.05
+  }
+ },
+ "FSSNX": {
+  "name": "Fidelity Small Cap Index Fund",
+  "struct": "Mutual fund",
+  "grp": "Equity",
+  "type": "U.S. small cap core",
+  "style": "Small Blend",
+  "sponsor": "Fidelity Investments",
+  "incept": "2011-09-08",
+  "bench": "Russell 2000 Index",
+  "mgr": "Advised by Fidelity Management & Research and sub-advised by Geode Capital Management. Portfolio managers are Louis Bottari (since 2011), Peter Matthew (since 2012), Robert Regan (since 2016), and Payal Gupta and Navid Sohrabi (since 2019).",
+  "strat": "Index fund holding the roughly 2,000 small U.S. companies in the Russell 2000, at a cost of about 0.025% a year. No minimum investment, bought and sold at end-of-day NAV, and usually distributes in June and December.",
+  "tax": "Mostly qualified dividends with a sizable nonqualified share from REITs and other holdings; index reconstitution can produce occasional capital gain distributions.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.65,
+   "ord": 0.15,
+   "reit": 0.1,
+   "ltcg": 0.1
+  }
+ },
+ "FVTKX": {
+  "name": "Fidelity Freedom 2060 Fund Class K6",
+  "struct": "Mutual fund",
+  "grp": "Fund of funds",
+  "type": "Target date 2060",
+  "style": "Multi-asset",
+  "sponsor": "Fidelity Investments",
+  "incept": "2017-06-07",
+  "bench": "Fidelity Freedom 2060 Composite Index",
+  "mgr": "Actively managed by Fidelity's Global Asset Allocation team, which sets the Freedom glide path and picks the underlying Fidelity funds. Portfolio managers are Andrew Dierdorf and Brett Sumsion, joined by Finola McGuire Foley and Cait Dourney in April 2025.",
+  "strat": "Target date fund for people retiring around 2060, holding about 40 Fidelity series funds across U.S. stocks, foreign and emerging market stocks and bonds, with a glide path that grows more conservative toward and after 2060. The low-cost K6 class is offered mainly through employer retirement plans, is bought at end-of-day NAV and usually distributes once a year in December.",
+  "tax": "A mix of qualified and nonqualified dividends passed through from the underlying funds, plus capital gain distributions in many years from active underlying funds and rebalancing.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.45,
+   "ord": 0.25,
+   "ltcg": 0.3
+  }
+ },
+ "SWPPX": {
+  "name": "Schwab S&P 500 Index Fund",
+  "struct": "Mutual fund",
+  "grp": "Equity",
+  "type": "U.S. large cap core",
+  "style": "Large Blend",
+  "sponsor": "Schwab Asset Management",
+  "incept": "1997-05-19",
+  "bench": "S&P 500 Index",
+  "mgr": "Index fund run by Schwab Asset Management, the asset management arm of Charles Schwab. Portfolio managers are Ferian Juwono (since 2013), Christopher Bliss (since 2017), Jeremy Brown (since 2019) and Agnes Zau (since 2023).",
+  "strat": "Full-replication S&P 500 index fund with a 0.02% expense ratio and no minimum investment, bought and sold at end-of-day NAV. Pays dividends once a year in December.",
+  "tax": "Almost entirely qualified dividends; capital gain distributions have been rare.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "qual": 0.95,
+   "ord": 0.05
+  }
  }
 }
