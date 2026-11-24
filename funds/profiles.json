@@ -1103,5 +1103,82 @@
    "qual": 0.95,
    "ord": 0.05
   }
+ },
+ "GPIQ": {
+  "name": "Goldman Sachs Nasdaq-100 Premium Income ETF",
+  "struct": "ETF",
+  "grp": "Option income",
+  "type": "Covered call: Nasdaq-100",
+  "style": "Large Growth",
+  "sponsor": "Goldman Sachs Asset Management",
+  "incept": "2023-10-24",
+  "bench": "Nasdaq-100 Index",
+  "mgr": "Goldman Sachs Asset Management's Quantitative Investment Strategies team, which runs Goldman's premium income ETF lineup (GPIX, GPIQ). Named Goldman Sachs Nasdaq-100 Core Premium Income ETF until April 2025.",
+  "strat": "Holds the Nasdaq-100 stocks at roughly index weights and sells Nasdaq-100 index calls on about 25% to 75% of the portfolio, adjusting coverage with volatility so the fund keeps more upside than a fully covered strategy. Distributes monthly.",
+  "tax": "Index options are Section 1256 contracts (60% long-term, 40% short-term). Distributions have included a large share of return of capital in some years.",
+  "opt": "NDX or QQQ calls, including FLEX options, on a partial, flexible share of the portfolio",
+  "lev": "None",
+  "taxMix": {
+   "roc": 0.6,
+   "s1256": 0.25,
+   "qual": 0.1,
+   "ord": 0.05
+  }
+ },
+ "OVL": {
+  "name": "Overlay Shares Large Cap Equity ETF",
+  "struct": "ETF",
+  "grp": "Option income",
+  "type": "Put spread: S&P 500",
+  "style": "Large Blend",
+  "sponsor": "Liquid Strategies (Overlay Shares)",
+  "incept": "2019-09-30",
+  "bench": "S&P 500 Index",
+  "mgr": "Liquid Strategies LLC, the adviser behind the Overlay Shares lineup, which applies the same S&P 500 put spread overlay across its large cap, small cap, foreign and bond funds.",
+  "strat": "Holds nearly all assets in a low-cost S&P 500 ETF (VOO) and sells short-dated SPX put spreads with notional up to 100% of net assets, buying lower-strike puts to cap the loss on each spread. Keeps full upside on the stock side; adds option income and extra downside risk in sharp selloffs.",
+  "tax": "SPX options are Section 1256 contracts (60% long-term, 40% short-term); the VOO position adds qualified dividends.",
+  "opt": "Short-term SPX put spreads (short puts with long puts at a lower strike)",
+  "lev": "None directly; the put spreads add equity exposure in declines",
+  "taxMix": {
+   "s1256": 0.6,
+   "qual": 0.3,
+   "ord": 0.1
+  }
+ },
+ "AGNCO": {
+  "name": "AGNC Investment Corp. 6.50% Series E Fixed-to-Floating Rate Preferred (depositary shares)",
+  "struct": "Preferred",
+  "grp": "Credit",
+  "type": "Preferred stock",
+  "style": "Medium quality, short duration (fixed income)",
+  "sponsor": "AGNC Investment Corp.",
+  "incept": "2019",
+  "bench": "None",
+  "mgr": "Issued by AGNC Investment Corp., the Bethesda-based mortgage REIT that invests mainly in agency mortgage-backed securities. This is a preferred stock of the company, not a fund.",
+  "strat": "$25-par cumulative redeemable preferred. Since October 2024 it pays a floating rate of three-month CME Term SOFR plus 0.26161% plus 4.993%, reset quarterly and paid quarterly (about 9% recently). Callable at par; ranks behind AGNC's debt and ahead of its common.",
+  "tax": "REIT preferred dividends are generally nonqualified ordinary dividends, eligible for the Section 199A 20% deduction.",
+  "opt": "None",
+  "lev": "Not applicable; credit quality depends on the issuer's balance sheet",
+  "taxMix": {
+   "reit": 1.0
+  }
+ },
+ "FDRXX": {
+  "name": "Fidelity Government Cash Reserves",
+  "struct": "Money market",
+  "grp": "Credit",
+  "type": "Government money market",
+  "style": "High quality, short duration (fixed income)",
+  "sponsor": "Fidelity Investments",
+  "incept": "1979",
+  "bench": "None",
+  "mgr": "Fidelity Investments' money market group. Used here as the cash sweep in the Texas A&M ORP.",
+  "strat": "Government money market fund holding Treasury and agency securities and repurchase agreements backed by them, managed to a stable $1.00 share price. Pays daily accrued dividends monthly.",
+  "tax": "Dividends are ordinary income; part may be exempt from state tax as U.S. government interest.",
+  "opt": "None",
+  "lev": "None",
+  "taxMix": {
+   "ord": 1.0
+  }
  }
 }
